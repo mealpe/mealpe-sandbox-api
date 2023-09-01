@@ -3,16 +3,19 @@ var router = express.Router();
 var supabaseInstance = require("../../services/supabaseClient").supabase;
 const multer = require("multer");
 const upload = multer();
+const axios = require('axios');
+
 
 router.post("/createOutlet", async (req, res) => {
   const {
     outletName,
     email,
+    isPrimaryOutlet,
+    primaryOutletId,
     password,
     bankDetailsId,
     outletAdminId,
     cityId,
-    restaurantId,
     restaurantName,
     mobile,
     GSTIN,
@@ -21,7 +24,11 @@ router.post("/createOutlet", async (req, res) => {
     openTime,
     closeTime,
     Restaurant_category,
-    Timing
+    Timing,
+    isDelivery,
+    isDineIn,
+    isPickUp,
+    isGSTShow
   } = req.body;
   try {
     const { data, error } = await supabaseInstance.auth.signUp(
@@ -39,12 +46,11 @@ router.post("/createOutlet", async (req, res) => {
       const outletId = data.user.id;
 
 
-      const bankDetails = await supabaseInstance.from("BankDetails").insert({ accountNumber: bankDetailsId.accountNumber, BankName: bankDetailsId.BankName, IFSCCode: bankDetailsId.IFSCCode }).select().maybeSingle();
+      const bankDetails = await supabaseInstance.from("BankDetails").insert({ accountNumber: bankDetailsId?.accountNumber || null, BankName: bankDetailsId?.BankName || null, IFSCCode: bankDetailsId?.IFSCCode || null }).select().maybeSingle();
       const _bankDetailsId = bankDetails.data.bankDetailsId;
 
-      const outletDetails = await supabaseInstance.from("Outlet_Admin").insert({ name: outletAdminId?.name, mobile: outletAdminId?.mobile, email: outletAdminId?.email, address: outletAdminId?.address, pancard: outletAdminId?.pancard }).select().maybeSingle();
+      const outletDetails = await supabaseInstance.from("Outlet_Admin").insert({ name: outletAdminId?.name || null, mobile: outletAdminId?.mobile || null, email: outletAdminId?.email || null, address: outletAdminId?.address || null, pancard: outletAdminId?.pancard || null }).select().maybeSingle();
       const _outletAdminId = outletDetails.data.outletAdminId;
-      console.log("_outletAdminId",_outletAdminId)
 
       let postObject = { 
         outletId,
@@ -58,13 +64,33 @@ router.post("/createOutlet", async (req, res) => {
         campusId,
         address,
         cityId,
-        restaurantId
+        isPrimaryOutlet,
+        primaryOutletId,
+        isGSTShow,
+        isDelivery,    
+        isDineIn,
+        isPickUp,
       }
       if (openTime) {
         postObject.openTime = openTime;
       }
       if (closeTime) {
         postObject.closeTime = closeTime;
+      }
+      if (isDelivery) {
+        postObject.isDelivery = true;
+      }
+      if (isDineIn) {
+        postObject.isDineIn = true;
+      }
+      if (isPickUp) {
+        postObject.isPickUp = true;
+      }
+
+      if (!isPrimaryOutlet) {
+       postObject.primaryOutletId = primaryOutletId;
+      } else {
+        postObject.primaryOutletId = null;
       }
       const inserRestaurentNewkDetails = await supabaseInstance.from("Outlet").insert(postObject).select("*").maybeSingle();
 
@@ -104,10 +130,10 @@ router.post("/createOutlet", async (req, res) => {
       throw error;
     }
   } catch (error) {
+    console.log(error)
     res.status(500).json({ success: false, error: error.message });
   }
 })
-
 
 router.post("/upsertFssaiLicensePhoto",upload.single('file'), async (req, res) => {
   const { outletId } = req.body;
@@ -126,7 +152,7 @@ router.post("/upsertFssaiLicensePhoto",upload.single('file'), async (req, res) =
       const publickUrlresponse = await supabaseInstance.storage.from('fssai-license').getPublicUrl(data?.path);
       if (publickUrlresponse?.data?.publicUrl) {
         const publicUrl = publickUrlresponse?.data?.publicUrl;
-        const outletData = await supabaseInstance.from("Outlet").update({ FSSAI_License: `${publicUrl}?${Date.now}` }).eq("outletId", outletId).select("*, bankDetailsId(*), campusId(*),restaurantId(*)").maybeSingle();
+        const outletData = await supabaseInstance.from("Outlet").update({ FSSAI_License:`${publicUrl}?${new Date().getTime()}`}).eq("outletId", outletId).select("*, bankDetailsId(*), outletAdminId(*), Tax!left(*),Timing!left(*),Restaurant_category!left(*)").maybeSingle();
         res.status(200).json({
           success: true,
           data: outletData.data,
@@ -142,17 +168,122 @@ router.post("/upsertFssaiLicensePhoto",upload.single('file'), async (req, res) =
   }
 })
 
-router.get("/getOutletList", async (req, res) => {
+router.get("/getOutletList/:campusId", async (req, res) => {
+  const {campusId} = req.params;
+  const { page, perPage, searchText, categoryId } = req.query;
+  const pageNumber = parseInt(page) || 1;
+  const itemsPerPage = parseInt(perPage) || 10;
+  try {
+    let query = supabaseInstance
+      .rpc('get_outlet_list', { category_id: categoryId ? categoryId : null,campus_id:campusId }, {count: "exact"})
+      .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
+      .order("outlet_name", { ascending: true })
+
+    if (searchText) {
+      query = query.or(`address.ilike.%${searchText}%,outlet_name.ilike.%${searchText}%`);
+    }
+  
+    
+    const { data, error, count } = await query;
+
+    if (data) {
+      const totalPages = Math.ceil(count / itemsPerPage);
+      res.status(200).json({
+        success: true,
+        data,
+        categoryId,
+        meta: {
+          page: pageNumber,
+          perPage: itemsPerPage,
+          totalPages,
+          totalCount: count,
+        },
+      });
+    } else{
+      throw error
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get("/getPrimaryOutletList", async (req, res) => {
   const { page, perPage, searchText } = req.query;
   const pageNumber = parseInt(page) || 1;
   const itemsPerPage = parseInt(perPage) || 10;
   try {
-    const { data, error, count } = await supabaseInstance
+
+    if(searchText){
+      const { data, error, count } = await supabaseInstance
       .from("Outlet")
       .select("*, restaurantId(*), campusId(*),outletAdminId(*), bankDetailsId (*),cityId(*)), Tax!left(taxid, taxname, tax)", { count: "exact" })
-      .or(`address.ilike.${searchText},outletName.ilike.${searchText}`)
+      // .ilike(`outletName,${searchText}`)
+      // .or(`address.ilike.${searchText},outletName.ilike.${searchText}`)
+      .or(`address.ilike.%${searchText}%,outletName.ilike.%${searchText}%`)
       .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
-      .order("outletName", { ascending: true });
+      .order("outletName", { ascending: true })
+      .eq("isPrimaryOutlet",true)
+      if (data) {
+        const totalPages = Math.ceil(count / itemsPerPage);
+        res.status(200).json({
+          success: true,
+          data,
+          meta: {
+            page: pageNumber,
+            perPage: itemsPerPage,
+            totalPages,
+            totalCount: count,
+          },
+        });
+      }else{
+        throw error
+      }
+    }else{
+      const { data, error, count } = await supabaseInstance
+      .from("Outlet")
+      .select("*, restaurantId(*), campusId(*),outletAdminId(*), bankDetailsId (*),cityId(*)), Tax!left(taxid, taxname, tax)", { count: "exact" })
+      .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
+      .order("outletName", { ascending: true })
+      .eq("isPrimaryOutlet",true)
+
+      if (data) {
+        const totalPages = Math.ceil(count / itemsPerPage);
+        res.status(200).json({
+          success: true,
+          data,
+          meta: {
+            page: pageNumber,
+            perPage: itemsPerPage,
+            totalPages,
+            totalCount: count,
+          },
+        });
+      }else{
+        throw error
+      }
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get("/getOutletListByRestaurantId/:outletId", async (req, res) => {
+  const { outletId } = req.params;
+  const { page, perPage, searchText } = req.query;
+  const pageNumber = parseInt(page) || 1;
+  const itemsPerPage = parseInt(perPage) || 10;
+  try {
+    let query = supabaseInstance
+      .from("Outlet")
+      .select("*, restaurantId(*), campusId(*),outletAdminId(*), bankDetailsId (*),cityId(*)), Tax!left(taxid, taxname, tax)", { count: "exact" })
+      .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
+      .order("outletName", { ascending: true })
+      .eq("outletId", outletId)
+      if(searchText) {
+        query = query.or(`address.ilike.%${searchText}%,outletName.ilike.%${searchText}%`);
+        // query = query.ilike('outletName', `%${searchText}%`);
+      }
+      const { data, error, count } = await query;
 
     if (data) {
       const totalPages = Math.ceil(count / itemsPerPage);
@@ -166,14 +297,16 @@ router.get("/getOutletList", async (req, res) => {
           totalCount: count,
         },
       });
+    } else {
+      throw error
     }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.get("/getOutletListByRestaurantId/:restaurantId", async (req, res) => {
-  const { restaurantId } = req.params;
+router.get("/getOutletListByPrimaryOutletId/:primaryOutletId", async (req, res) => {
+  const { primaryOutletId } = req.params;
   const { page, perPage, searchText } = req.query;
   const pageNumber = parseInt(page) || 1;
   const itemsPerPage = parseInt(perPage) || 10;
@@ -183,7 +316,7 @@ router.get("/getOutletListByRestaurantId/:restaurantId", async (req, res) => {
       .select("*, restaurantId(*), campusId(*),outletAdminId(*), bankDetailsId (*),cityId(*)), Tax!left(taxid, taxname, tax)", { count: "exact" })
       .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
       .order("outletName", { ascending: true })
-      .eq("restaurantId", restaurantId)
+      .eq("primaryOutletId", primaryOutletId)
       if(searchText) {
         query = query.or(`address.ilike.%${searchText}%,outletName.ilike.%${searchText}%`);
         // query = query.ilike('outletName', `%${searchText}%`);
@@ -212,11 +345,13 @@ router.get("/getOutletListByRestaurantId/:restaurantId", async (req, res) => {
 
 router.post("/updateOutlet/:outletId", async (req, res) => {
 
-  const {outletId} = req.params;
-   const outletData = req.body;
-  const bankDetailsData= outletData.bankDetailsId;
-  const outletDetailsData = outletData.outletAdminId;
-  delete outletDetailsData?.email;
+  const { outletId } = req.params;
+  const outletData = req.body;
+  const bankDetailsData= outletData?.bankDetailsId;
+  const outletAdminId = outletData?.outletAdminId;
+  const timeDetailsData = outletData?.Timing;
+  const categoryDetailsData = outletData?.Restaurant_category;
+  delete outletAdminId?.email;
   delete  outletData?.bankDetailsId;
   delete  outletData?.outletAdminId;
   delete  outletData?.Restaurant_category;
@@ -226,22 +361,40 @@ router.post("/updateOutlet/:outletId", async (req, res) => {
   delete  outletData?.password;
  
    try {
-     const { data, error } = await supabaseInstance
+    if (bankDetailsData) {
+      const bankDetails = await supabaseInstance.from("BankDetails").update({...bankDetailsData }).eq("bankDetailsId",bankDetailsData.bankDetailsId).select("*");
+    }
+    
+    if (categoryDetailsData?.length > 0) {
+      const categoryDataDelete =await  supabaseInstance.from("Restaurant_category").delete().eq("outletId",outletId);
+      for(let category of categoryDetailsData ) {
+        const categoryData = await supabaseInstance.from("Restaurant_category").insert({categoryId:category,outletId}).select("*");
+      }
+    }
+
+    if (timeDetailsData?.length > 0) {
+      const timingDataDelete = await supabaseInstance.from("Timing").delete().eq("outletId",outletId);
+    }
+    for(let data of timeDetailsData){
+    const timingData = await supabaseInstance.from("Timing").insert({outletId, dayId: data.dayId, openTime: data.openTime, closeTime: data.closeTime }).select("*");
+    }
+    
+    if (outletAdminId) {
+      const outletAdminDetails = await supabaseInstance.from("Outlet_Admin").update({...outletAdminId }).eq("outletAdminId",outletAdminId.outletAdminId).select("*");
+    }
+
+    const { data, error } = await supabaseInstance
      .from("Outlet")
      .update( {...outletData})
      .eq("outletId",outletId)
-     .select("*");
-     console.log(outletData.bankDetailsId)
-   
+     .select("*,bankDetailsId(*),outletAdminId(*),Timing!left(*),Restaurant_category!left(categoryId)");
+  
      if (data) {
- 
-       const bankDetails = await supabaseInstance.from("BankDetails").update({...bankDetailsData }).eq("bankDetailsId",bankDetailsData.bankDetailsId).select("*");
-       const outletDetails = await supabaseInstance.from("Outlet_Admin").update({...outletDetailsData }).eq("outletAdminId",outletDetailsData.outletAdminId).select("*");
-       
+      console.log
          res.status(200).json({
            success: true,
            message: "Data updated succesfully",
-           data: data
+           data:data
          });
      } else {
        throw error;
@@ -251,7 +404,6 @@ router.post("/updateOutlet/:outletId", async (req, res) => {
    }
  })
 
- 
 router.post("/updatePackagingCharge/:outletId", async (req, res) => {
   const { outletId } = req.params;
   const {packaging_charge}  = req.body;
@@ -265,6 +417,28 @@ router.post("/updatePackagingCharge/:outletId", async (req, res) => {
 
     if (data) {
       console.log("data-->",data)
+      res.status(200).json({
+        success: true,
+        data: data,
+      });
+    } else {
+      throw error
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/publishOutlet/:outletId", async (req, res) => {
+  const { outletId } = req.params;
+  try {
+    const { data, error } = await supabaseInstance
+      .from("Outlet")
+      .update({isPublished: true, publishProcessingStep: 3})
+      .eq("outletId",outletId)
+      .select("*").maybeSingle();
+
+    if (data) {
       res.status(200).json({
         success: true,
         data: data,
@@ -302,7 +476,99 @@ router.post("/updateTaxCharge", async (req, res) => {
   }
 });
 
+router.post("/updatePetPooja/:outletId", async (req, res) => {
+  const { outletId } = req.params;
+  const {petPoojaAppKey,petPoojaAppSecret,petPoojaApAccessToken,petPoojaRestId,publishProcessingStep} = req.body;
+  
+  try {
+    const postbody = { petPoojaAppKey,petPoojaAppSecret,petPoojaApAccessToken,petPoojaRestId };
+    if (publishProcessingStep) {
+      postbody.publishProcessingStep = publishProcessingStep;
+    }
+    const {data, error} = await supabaseInstance
+        .from("Outlet")
+        .update(postbody)
+        .select("*, bankDetailsId(*), outletAdminId(*), Tax!left(*),Timing!left(*),Restaurant_category!left(*)")
+        .eq("outletId",outletId)
 
+    if (data) {
+      res.status(200).json({
+        success: true,
+        message: "Data updated succesfully",
+        data:data
+      });
+    } else {
+      throw error;
+    }
+   
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
+router.post("/upsertLogoImage",upload.single('file'), async (req, res) => {
+  const { outletId } = req.body;
+  try {
+    const { data, error } = await supabaseInstance
+      .storage
+      .from('logo-images')
+      .upload(outletId + ".webp", req.file.buffer, {
+        cacheControl: '3600',
+        upsert: true,
+        contentType: 'image/webp'
+      })
+
+    if (data?.path) {
+      const publickUrlresponse = await supabaseInstance.storage.from('logo-images').getPublicUrl(data?.path);
+      if (publickUrlresponse?.data?.publicUrl) {
+        const publicUrl = publickUrlresponse?.data?.publicUrl;
+        const outletData = await supabaseInstance.from("Outlet").update({ logo:`${publicUrl}?${new Date().getTime()}`}).eq("outletId", outletId).select("*, bankDetailsId(*), outletAdminId(*), Tax!left(*),Timing!left(*),Restaurant_category!left(*)").maybeSingle();
+        res.status(200).json({
+          success: true,
+          data: outletData.data,
+        });
+      } else {
+        throw publickUrlresponse.error || "Getting Error in PublicUrl"
+      }
+    } else {
+      throw error
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error });
+  }
+})
+
+router.post("/upsertHeaderImage",upload.single('file'), async (req, res) => {
+  const { outletId } = req.body;
+  try {
+    const { data, error } = await supabaseInstance
+      .storage
+      .from('header-images')
+      .upload(outletId + ".webp", req.file.buffer, {
+        cacheControl: '3600',
+        upsert: true,
+        contentType: 'image/webp'
+      })
+
+    if (data?.path) {
+      const publickUrlresponse = await supabaseInstance.storage.from('header-images').getPublicUrl(data?.path);
+      if (publickUrlresponse?.data?.publicUrl) {
+        const publicUrl = publickUrlresponse?.data?.publicUrl;
+        const outletData = await supabaseInstance.from("Outlet").update({ headerImage:`${publicUrl}?${new Date().getTime()}`}).eq("outletId", outletId).select("*, bankDetailsId(*), outletAdminId(*), Tax!left(*),Timing!left(*),Restaurant_category!left(*)").maybeSingle();
+        res.status(200).json({
+          success: true,
+          data: outletData.data,
+        });
+      } else {
+        throw publickUrlresponse.error || "Getting Error in PublicUrl"
+      }
+    } else {
+      throw error
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error });
+  }
+})
 
 module.exports = router;

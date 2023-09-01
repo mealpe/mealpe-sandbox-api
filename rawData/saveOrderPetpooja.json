@@ -1,0 +1,129 @@
+{
+    "app_key": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "app_secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "access_token": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "orderinfo": {
+        "OrderInfo": {
+            "Restaurant": {
+                "details": {
+                    "res_name": "Dynamite Lounge",
+                    "address": "2nd Floor, Reliance Mall, Nr.Akshar Chowk",
+                    "contact_information": "9427846660",
+                    "restID": "xxxxxx"
+                }
+            },
+            "Customer": {
+                "details": {
+                    "email": "xxx@yahoo.com",
+                    "name": "Advait",
+                    "address": "2, Amin Society, Naranpura",
+                    "phone": "9090909090",
+                    "latitude": "34.11752681212772",
+                    "longitude": "74.72949172653219"
+                }
+            },
+            "Order": {
+                "details": {
+                    "orderID": "A-1",
+                    "preorder_date": "2022-01-01",
+                    "preorder_time": "15:50:00",
+                    "service_charge": "0",
+                    "sc_tax_amount": "0",
+                    "delivery_charges": "50",
+                    "dc_tax_amount": "2.5",
+                    "dc_gst_details": [
+                        {
+                            "gst_liable": "vendor",
+                            "amount": "2.5"
+                        },
+                        {
+                            "gst_liable": "restaurant",
+                            "amount": "0"
+                        }
+                    ],
+                    "packing_charges": "20",
+                    "pc_tax_amount": "1",
+                    "pc_gst_details": [
+                        {
+                            "gst_liable": "vendor",
+                            "amount": "1"
+                        },
+                        {
+                            "gst_liable": "restaurant",
+                            "amount": "0"
+                        }
+                    ],
+                    "order_type": "H",
+                    "ondc_bap": "buyerAppName",
+                    "advanced_order": "N",
+                    "payment_type": "COD",
+                    "table_no": "",
+                    "no_of_persons": "0",
+                    "discount_total": "45",
+                    "tax_total": "65.52",
+                    "discount_type": "F",
+                    "total": "560",
+                    "description": "",
+                    "created_on": "2022-01-01 15:49:00",
+                    "enable_delivery": 1,
+                    "min_prep_time": 20,
+                    "callback_url": "https.xyz.abc"
+                }
+            },
+            "OrderItem": {
+                "details": [
+                    {
+                        "id": "7765862",
+                        "name": "Garlic Bread (3Pieces)",
+                        "gst_liability": "vendor",
+                        "item_tax": [
+                            {
+                                "id": "11213",
+                                "name": "CGST",
+                                "amount": "3.15"
+                            },
+                            {
+                                "id": "20375",
+                                "name": "SGST",
+                                "amount": "3.15"
+                            }
+                        ],
+                        "item_discount": "14",
+                        "price": "140.00",
+                        "final_price": "126",
+                        "quantity": "1",
+                        "description": "",
+                        "variation_name": "3Pieces",
+                        "variation_id": "89058",
+                        "AddonItem": {
+                            "details": []
+                        }
+                    }
+                ]
+            },
+            "Tax": {
+                "details": [
+                    {
+                        "id": "11213",
+                        "title": "CGST",
+                        "type": "P",
+                        "price": "2.5",
+                        "tax": "5.9",
+                        "restaurant_liable_amt": "0.00"
+                    },
+                    {
+                        "id": "20375",
+                        "title": "SGST",
+                        "type": "P",
+                        "price": "2.5",
+                        "tax": "5.9",
+                        "restaurant_liable_amt": "0.00"
+                    }
+                ]
+            },
+            "Discount": {}
+        },
+        "udid": "",
+        "device_type": "Web"
+    }
+}

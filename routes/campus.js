@@ -35,7 +35,7 @@ router.get("/getCampusList", async (req, res) => {
       .from("Campus")
       .select("*", { count: "exact" })
       .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
-      .order("campusId", { ascending: true });
+      .order("created_at", { ascending: false });
 
     if (data) {
       const totalPages = Math.ceil(count / itemsPerPage);
@@ -55,6 +55,27 @@ router.get("/getCampusList", async (req, res) => {
   }
 });
 
+router.get("/getCampus/:cityId", async (req, res) => {
+  const {cityId} = req.params;
+  try {
+    const { data, error } = await supabaseInstance
+      .from("Campus")
+      .select("*")
+      .eq("cityId",cityId)
+
+    if (data) {
+      res.status(200).json({
+        success: true,
+        data,
+      });
+    }else
+    {
+      throw error;
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 router.post("/updateCampus/:id", async (req, res) => {
   const { id } = req.params;
   const { campusName, address } = req.body;
@@ -104,10 +125,9 @@ router.post("/deleteCampus/:id", async (req, res) => {
   }
 });
 
-
 router.get("/getAllCampusList", async (req, res) => {
   try {
-    const { data, error } = await supabaseInstance.from("Campus").select();
+    const { data, error } = await supabaseInstance.from("Campus").select("*").order("created_at", { ascending: false });
     if (data) {
       res.status(200).json({
         success: true,

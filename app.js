@@ -16,8 +16,14 @@ var customerRouter = require("./routes/customer")
 var resturantRouter = require("./routes/restaurent")
 var outletRouter = require("./routes/outlet/outlet")
 var menuRouter = require("./routes/outlet/menu")
-var staffRouter = require("./routes/outlet/staff")
+var staffRouter = require("./routes/staff/staff")
+var roleRouter = require("./routes/staff/role")
 var commonRouter = require("./routes/common")
+var pushMenuRouter = require("./routes/petpooja/pushMenu").router;
+var orderRouter = require("./routes/order/order");
+var favoriteRouter = require("./routes/favorite/favorite");
+var ratingRouter = require("./routes/rating/rating");
+var messageRouter = require("./routes/message");
 
 
 var app = express();
@@ -43,8 +49,14 @@ app.use('/outlet', outletRouter);
 app.use("/days", daysRouter);
 app.use("/category", categoryRouter);
 app.use('/outlet/menu', menuRouter);
-app.use('/outlet/staff', staffRouter);
+app.use('/staff/staff', staffRouter);
+app.use('/staff/role', roleRouter);
 app.use('/common', commonRouter);
+app.use('/petpooja/pushMenu', pushMenuRouter);
+app.use('/order/order', orderRouter);
+app.use('/favorite/favorite', favoriteRouter);
+app.use('/rating/rating', ratingRouter);
+app.use('/message', messageRouter);
 
 
 

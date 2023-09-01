@@ -99,6 +99,44 @@ router.post("/adminLogin", async (req, res) => {
   }
 });
 
+router.post("/resetPassword", async (req, res) => {
+  const { email } = req.body;
+  try {
+    const resetPasswordForEmailResponse = await supabaseInstance.auth.resetPasswordForEmail(email, {
+      redirectTo: 'https://mealpe-super-admin-testing.web.app',
+    })
+    if (resetPasswordForEmailResponse?.data) {
+      res.send({
+        success: true,
+        message: "Link Shared",
+      });
+    } else {
+      throw resetPasswordForEmailResponse.error;
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || error });
+  }
+});
+
+router.post("/updatePassword", async (req, res) => {
+  const { new_password } = req.body;
+  try {
+    const updatePasswordForEmailResponse = await supabaseInstance.auth.updateUser({
+      password: new_password
+    })
+    if (updatePasswordForEmailResponse?.data) {
+      res.send({
+        success: true,
+        message: "Password Updated succesfully",
+      });
+    } else {
+      throw updatePasswordForEmailResponse.error;
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || error });
+  }
+});
+
 router.post("/updateAdminPassword", async (req, res) => {
   const { password, adminId} = req.body;
   
@@ -143,4 +181,62 @@ router.post("/updateAdmin/:adminId", async (req, res) => {
     res.status(500).json({ success: false, error: error });
   }
 });
+
+router.post("/updateOutletAdmin/:outletAdminId", async (req, res) => {
+  const { outletAdminId } = req.params;
+  const {name,mobile} = req.body;
+   try {
+    const { data, error } = await supabaseInstance
+      .from("Outlet_Admin")
+      .update({name,mobile})
+      .eq("outletAdminId", outletAdminId)
+      .select("*");
+
+    if (data) {
+      res.status(200).json({
+        success: true,
+        message: "Data updated succesfully",
+        data: data,
+      });
+    } else {
+      throw error;
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error });
+  }
+});
+
+router.get("/getOutletAdminList", async (req, res) => {
+  const { page, perPage, searchText } = req.query; 
+  const pageNumber = parseInt(page) || 1;
+  const itemsPerPage = parseInt(perPage) || 10;
+
+  try {
+    const { data, error, count } = await supabaseInstance
+      .from("Outlet_Admin")
+      .select("*,Outlet(*)", { count: "exact" })
+      .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
+      .or(`name.ilike.%${searchText}%`)
+      // .order("outletAdminId", { ascending: true });
+
+    if (data) {
+      const totalPages = Math.ceil(count / itemsPerPage);
+      res.status(200).json({
+        success: true,
+        data,
+        meta: {
+          page: pageNumber,
+          perPage: itemsPerPage,
+          totalPages,
+          totalCount: count,
+        },
+      });
+    }else{
+      throw error;
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;

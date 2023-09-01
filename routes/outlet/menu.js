@@ -6,11 +6,11 @@ const upload = multer();
 
 
 router.post("/createCategory", async (req, res) => {
-  const { outletId, active, categoryname } = req.body;
+  const { outletId, status, categoryname } = req.body;
   try {
     const { data, error } = await supabaseInstance
       .from("Menu_Categories")
-      .insert({ outletId, active, categoryname })
+      .insert({ outletId, status, categoryname })
       .select("*")
 
     if (data) {
@@ -91,7 +91,7 @@ router.post("/upsertCategoryImage", upload.single('file'), async (req, res) => {
       console.log("publickUrlresponse",publickUrlresponse)
       if (publickUrlresponse?.data?.publicUrl) {
         const publicUrl = publickUrlresponse?.data?.publicUrl;
-        const menuCategoryData = await supabaseInstance.from("Menu_Categories").update({ category_image_url: `${publicUrl}?${Date.now}` }).eq("categoryid", categoryid).select("*").maybeSingle();
+        const menuCategoryData = await supabaseInstance.from("Menu_Categories").update({ category_image_url: `${publicUrl}?${new Date().getTime()}`}).eq("categoryid", categoryid).select("*").maybeSingle();
         res.status(200).json({
           success: true,
           data: menuCategoryData.data,
@@ -187,27 +187,18 @@ router.post("/updateMenu/:itemid", async (req, res) => {
   }
 });
 
-router.get("/getItemList", async (req, res) => {
-  const { page, perPage} = req.query; // Extract query parameters
-  const pageNumber = parseInt(page) || 1;
-  const itemsPerPage = parseInt(perPage) || 10;
+router.get("/getItemList/:outletId", async (req, res) => {
+  const { outletId } = req.params;
   try {
-    const { data, error, count } = await supabaseInstance
+    const { data, error } = await supabaseInstance
       .from("Menu_Item")
-      .select("*",{ count: "exact" })
-      .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
-
+      .select("*")
+      .eq("outletId", outletId)
+     
     if (data) {
-      const totalPages = Math.ceil(count / itemsPerPage);
       res.status(200).json({
         success: true,
         data: data,
-        meta: {
-          page: pageNumber,
-          perPage: itemsPerPage,
-          totalPages,
-          totalCount: count,
-        },
       });
     } else {
       throw error
@@ -255,7 +246,7 @@ router.post("/upsertMenuItemImage",upload.single('file'), async (req, res) => {
       const publickUrlresponse = await supabaseInstance.storage.from('menu-item-image').getPublicUrl(data?.path);
       if (publickUrlresponse?.data?.publicUrl) {
         const publicUrl = publickUrlresponse?.data?.publicUrl;
-        const menuData = await supabaseInstance.from("Menu_Item").update({ item_image_url: `${publicUrl}?${Date.now}` }).eq("itemid", itemid).select("*").maybeSingle();
+        const menuData = await supabaseInstance.from("Menu_Item").update({ item_image_url: `${publicUrl}?${new Date().getTime()}`}).eq("itemid", itemid).select("*").maybeSingle();
         res.status(200).json({
           success: true,
           data: menuData.data,
@@ -422,7 +413,7 @@ router.post("/upsertParentCategoryImage",upload.single('file'), async (req, res)
       const publickUrlresponse = await supabaseInstance.storage.from('category-image').getPublicUrl(data?.path);
       if (publickUrlresponse?.data?.publicUrl) {
         const publicUrl = publickUrlresponse?.data?.publicUrl;
-        const parentCategoryData = await supabaseInstance.from("Menu_Parent_Categories").update({ parent_category_image_url: `${publicUrl}?${Date.now}` }).eq("parent_category_id", parent_category_id).select("*").maybeSingle();
+        const parentCategoryData = await supabaseInstance.from("Menu_Parent_Categories").update({ parent_category_image_url:`${publicUrl}?${new Date().getTime()}`}).eq("parent_category_id", parent_category_id).select("*").maybeSingle();
         res.status(200).json({
           success: true,
           data: parentCategoryData.data,
