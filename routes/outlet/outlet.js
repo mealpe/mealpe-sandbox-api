@@ -28,7 +28,8 @@ router.post("/createOutlet", async (req, res) => {
     isDelivery,
     isDineIn,
     isPickUp,
-    isGSTShow
+    isGSTShow,
+    logo
   } = req.body;
   try {
     const { data, error } = await supabaseInstance.auth.signUp(
@@ -69,7 +70,7 @@ router.post("/createOutlet", async (req, res) => {
         isGSTShow,
         isDelivery,    
         isDineIn,
-        isPickUp,
+        isPickUp
       }
       if (openTime) {
         postObject.openTime = openTime;
@@ -85,6 +86,9 @@ router.post("/createOutlet", async (req, res) => {
       }
       if (isPickUp) {
         postObject.isPickUp = true;
+      }
+      if (logo) {
+        postObject.logo = logo;
       }
 
       if (!isPrimaryOutlet) {
@@ -167,45 +171,6 @@ router.post("/upsertFssaiLicensePhoto",upload.single('file'), async (req, res) =
     res.status(500).json({ success: false, error: error });
   }
 })
-
-router.get("/getOutletList/:campusId", async (req, res) => {
-  const {campusId} = req.params;
-  const { page, perPage, searchText, categoryId } = req.query;
-  const pageNumber = parseInt(page) || 1;
-  const itemsPerPage = parseInt(perPage) || 10;
-  try {
-    let query = supabaseInstance
-      .rpc('get_outlet_list', { category_id: categoryId ? categoryId : null,campus_id:campusId }, {count: "exact"})
-      .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
-      .order("outlet_name", { ascending: true })
-
-    if (searchText) {
-      query = query.or(`address.ilike.%${searchText}%,outlet_name.ilike.%${searchText}%`);
-    }
-  
-    
-    const { data, error, count } = await query;
-
-    if (data) {
-      const totalPages = Math.ceil(count / itemsPerPage);
-      res.status(200).json({
-        success: true,
-        data,
-        categoryId,
-        meta: {
-          page: pageNumber,
-          perPage: itemsPerPage,
-          totalPages,
-          totalCount: count,
-        },
-      });
-    } else{
-      throw error
-    }
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
 router.get("/getPrimaryOutletList", async (req, res) => {
   const { page, perPage, searchText } = req.query;
@@ -313,7 +278,7 @@ router.get("/getOutletListByPrimaryOutletId/:primaryOutletId", async (req, res) 
   try {
     let query = supabaseInstance
       .from("Outlet")
-      .select("*, restaurantId(*), campusId(*),outletAdminId(*), bankDetailsId (*),cityId(*)), Tax!left(taxid, taxname, tax)", { count: "exact" })
+      .select("*, primaryOutletId(*),restaurantId(*), campusId(*),outletAdminId(*), bankDetailsId (*),cityId(*)), Tax!left(taxid, taxname, tax)", { count: "exact" })
       .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
       .order("outletName", { ascending: true })
       .eq("primaryOutletId", primaryOutletId)
@@ -374,10 +339,11 @@ router.post("/updateOutlet/:outletId", async (req, res) => {
 
     if (timeDetailsData?.length > 0) {
       const timingDataDelete = await supabaseInstance.from("Timing").delete().eq("outletId",outletId);
+      for(let data of timeDetailsData){
+        const timingData = await supabaseInstance.from("Timing").insert({outletId, dayId: data.dayId, openTime: data.openTime, closeTime: data.closeTime }).select("*");
+      }
     }
-    for(let data of timeDetailsData){
-    const timingData = await supabaseInstance.from("Timing").insert({outletId, dayId: data.dayId, openTime: data.openTime, closeTime: data.closeTime }).select("*");
-    }
+    
     
     if (outletAdminId) {
       const outletAdminDetails = await supabaseInstance.from("Outlet_Admin").update({...outletAdminId }).eq("outletAdminId",outletAdminId.outletAdminId).select("*");
@@ -400,7 +366,8 @@ router.post("/updateOutlet/:outletId", async (req, res) => {
        throw error;
      }
    } catch (error) {
-     res.status(500).json({ success: false, error: error });
+    console.error(error);
+    res.status(500).json({ success: false, error: error });
    }
  })
 
@@ -524,6 +491,11 @@ router.post("/upsertLogoImage",upload.single('file'), async (req, res) => {
       if (publickUrlresponse?.data?.publicUrl) {
         const publicUrl = publickUrlresponse?.data?.publicUrl;
         const outletData = await supabaseInstance.from("Outlet").update({ logo:`${publicUrl}?${new Date().getTime()}`}).eq("outletId", outletId).select("*, bankDetailsId(*), outletAdminId(*), Tax!left(*),Timing!left(*),Restaurant_category!left(*)").maybeSingle();
+
+        if(outletData?.isPrimaryOutlet === true){
+          await supabaseInstance.from("Outlet").update({ logo:`${publicUrl}?${new Date().getTime()}`}).eq("primaryOutletId", outletData.primaryOutletId).select("*").maybeSingle();
+        }
+
         res.status(200).json({
           success: true,
           data: outletData.data,
@@ -570,5 +542,65 @@ router.post("/upsertHeaderImage",upload.single('file'), async (req, res) => {
     res.status(500).json({ success: false, error: error });
   }
 })
+
+//!!!  Delete After 2 Days [07-09-2023]
+router.get("/getOutletList/:campusId", async (req, res) => {
+  const {campusId} = req.params;
+  const { page, perPage, searchText, categoryId } = req.query;
+  const pageNumber = parseInt(page) || 1;
+  const itemsPerPage = parseInt(perPage) || 10;
+  try {
+    let query = supabaseInstance
+      .rpc('get_outlet_list', { category_id: categoryId ? categoryId : null,campus_id:campusId, week_day: moment().format('dddd') }, {count: "exact"})
+      .eq("is_published",true)
+      .eq("is_active",true)
+      .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
+      .order("outlet_name", { ascending: true })
+    if (searchText) {
+      query = query.or(`address.ilike.%${searchText}%,outlet_name.ilike.%${searchText}%`);
+    }
+  
+    const { data, error, count } = await query;
+
+    if (data) {
+      // let outletData = data.map(m => ({...m, Timing: m?.Timing?.find(f => f.dayId?.day)})).map(m => {
+      let outletData = data.map(m => {
+        let flag = false;
+        if (m?.open_time && m?.close_time) {
+          const time = moment(moment().format('hh:mm:ss'), 'hh:mm:ss');
+          const beforeTime = moment(m?.open_time, 'hh:mm:ss');
+          const afterTime = moment(m?.close_time, 'hh:mm:ss');
+    
+          flag = time.isBetween(beforeTime, afterTime);
+        }
+
+        if (!flag && m.is_time_extended) {
+          flag = true;
+        }
+        return {
+          ...m,
+          isOutletOpen: flag
+        }
+      })
+
+      const totalPages = Math.ceil(count / itemsPerPage);
+      res.status(200).json({
+        success: true,
+        data: outletData,
+        categoryId,
+        meta: {
+          page: pageNumber,
+          perPage: itemsPerPage,
+          totalPages,
+          totalCount: count,
+        },
+      });
+    } else{
+      throw error
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 module.exports = router;

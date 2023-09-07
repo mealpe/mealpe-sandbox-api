@@ -4,6 +4,8 @@ const multer = require("multer");
 const upload = multer();
 var msg91config = require("../configs/msg91Config");
 const axios = require('axios');
+const moment = require("moment-timezone");
+moment().tz("Asia/Kolkata").format();
 
 var supabaseInstance = require("../services/supabaseClient").supabase;
 
@@ -156,30 +158,127 @@ router.get("/cafeteriaDetails/:outletId/:customerAuthUID", async (req, res) => {
 router.get("/homeData", async (req, res) => {
   const { categoryId, campusId } = req.query;
   try {
-    const cafeteriasForYouDataResponse = await supabaseInstance.from("Outlet").select("outletName,address,logo,headerImage,outletId").eq("campusId",campusId).eq("isPublished",true).eq("isActive",true).limit(5);
+    const cafeteriasForYouDataResponse = await supabaseInstance.from("Outlet").select("outletName,address,logo,headerImage,outletId,isActive, isTimeExtended, Timing!left(*, dayId(*))")
+    .eq("Timing.dayId.day", moment().format("dddd"))
+    .eq("campusId",campusId).eq("isPublished",true).eq("isActive",true).limit(5);
 
-    let PopularCafeteriasQuery = supabaseInstance.from("Restaurant_category").select("*,outletId(outletId,outletName,address,logo,headerImage)").not("outletId","is",null);
-    if (categoryId) {
-      PopularCafeteriasQuery = PopularCafeteriasQuery.eq("categoryId",categoryId);
-    }
-    const PopularCafeterias = await PopularCafeteriasQuery.limit(5);
+    let PopularCafeteriasResponse = await supabaseInstance.from("Outlet").select("outletName,address,logo,headerImage,outletId,isActive, isTimeExtended, Timing!left(*, dayId(*))")
+    .eq("Timing.dayId.day", moment().format("dddd"))
+    .eq("campusId",campusId).eq("isPublished",true).eq("isActive",true).limit(5);
 
-    if (cafeteriasForYouDataResponse.data && PopularCafeterias.data) {
+    if (cafeteriasForYouDataResponse.data && PopularCafeteriasResponse.data) {
+      
+      let cafeteriasForYouData = cafeteriasForYouDataResponse.data.map(m => ({...m, Timing: m?.Timing?.find(f => f.dayId?.day)})).map(m => {
+        let flag = false;
+        if (m?.Timing?.openTime && m?.Timing?.closeTime) {
+          const time = moment(moment().format('hh:mm:ss'), 'hh:mm:ss');
+          const beforeTime = moment(m?.Timing?.openTime, 'hh:mm:ss');
+          const afterTime = moment(m?.Timing?.closeTime, 'hh:mm:ss');
+    
+          flag = time.isBetween(beforeTime, afterTime);
+        }
+
+        if (!flag && m.isTimeExtended) {
+          flag = true;
+        }
+        return {
+          ...m,
+          isOutletOpen: flag
+        }
+      })
+      let PopularCafeterias = PopularCafeteriasResponse.data.map(m => ({...m, Timing: m?.Timing?.find(f => f.dayId?.day)})).map(m => {
+        let flag = false;
+        if (m?.Timing?.openTime && m?.Timing?.closeTime) {
+          const time = moment(moment().format('hh:mm:ss'), 'hh:mm:ss');
+          const beforeTime = moment(m?.Timing?.openTime, 'hh:mm:ss');
+          const afterTime = moment(m?.Timing?.closeTime, 'hh:mm:ss');
+    
+          flag = time.isBetween(beforeTime, afterTime);
+        }
+        if (!flag && m.isTimeExtended) {
+          flag = true;
+        }
+        return {
+          ...m,
+          isOutletOpen: flag
+        }
+      })
+
       res.status(200).json({
         success: true,
         message: "Data fetch succesfully",
         data:{
-          cafeteriasForYouData:cafeteriasForYouDataResponse.data,
-          PopularCafeterias:PopularCafeterias.data
+          cafeteriasForYouData,
+          PopularCafeterias
         }
       });
     } else{
       throw PopularCafeterias.error || cafeteriasForYouDataResponse.error;
     }
   } catch (error) {
+    console.log(error);
     res.status(500).json({ success: false, error: error });
   }
 })
+
+router.get("/getOutletList/:campusId", async (req, res) => {
+  const {campusId} = req.params;
+  const { page, perPage, searchText, categoryId } = req.query;
+  const pageNumber = parseInt(page) || 1;
+  const itemsPerPage = parseInt(perPage) || 10;
+  try {
+    let query = supabaseInstance
+      .rpc('get_outlet_list', { category_id: categoryId ? categoryId : null,campus_id:campusId, week_day: moment().format('dddd') }, {count: "exact"})
+      .eq("is_published",true)
+      .eq("is_active",true)
+      .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
+      .order("outlet_name", { ascending: true })
+    if (searchText) {
+      query = query.or(`address.ilike.%${searchText}%,outlet_name.ilike.%${searchText}%`);
+    }
+  
+    const { data, error, count } = await query;
+
+    if (data) {
+      // let outletData = data.map(m => ({...m, Timing: m?.Timing?.find(f => f.dayId?.day)})).map(m => {
+      let outletData = data.map(m => {
+        let flag = false;
+        if (m?.open_time && m?.close_time) {
+          const time = moment(moment().format('hh:mm:ss'), 'hh:mm:ss');
+          const beforeTime = moment(m?.open_time, 'hh:mm:ss');
+          const afterTime = moment(m?.close_time, 'hh:mm:ss');
+    
+          flag = time.isBetween(beforeTime, afterTime);
+        }
+
+        if (!flag && m.is_time_extended) {
+          flag = true;
+        }
+        return {
+          ...m,
+          isOutletOpen: flag
+        }
+      })
+
+      const totalPages = Math.ceil(count / itemsPerPage);
+      res.status(200).json({
+        success: true,
+        data: outletData,
+        categoryId,
+        meta: {
+          page: pageNumber,
+          perPage: itemsPerPage,
+          totalPages,
+          totalCount: count,
+        },
+      });
+    } else{
+      throw error
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 router.post("/upsertUserImage",upload.single('file'), async (req, res) => {
   const { customerAuthUID } = req.body;
@@ -215,23 +314,47 @@ router.post("/upsertUserImage",upload.single('file'), async (req, res) => {
 
 router.get("/getCustomer/:outletId", async (req, res) => {
   const { outletId } = req.params;
-  const { page, perPage,sort } = req.query;
+  const { page, perPage,sort,searchText } = req.query;
   const pageNumber = parseInt(page) || 1;
   const itemsPerPage = parseInt(perPage) || 10;
   try {
-    const { data, error } = await supabaseInstance
-      .rpc('get_distinct_customer_name', { outlet_id: outletId })
-      .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
-      .order("customername",{ascending:sort == 'true' ? true : false})
+    let query =  supabaseInstance
+      .rpc('get_distinct_customer_name', { outlet_id: outletId },{count:"exact"})
+      // .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
+      .order("created_at",{ascending:false})
+
+      if(sort){
+        query =query.order("customername",{ascending:sort == 'true' ? true : false})
+      }
+  
+      if(searchText){
+        query =query.ilike('customername',`%${searchText}%`)
+      }
+
+      if(page && perPage){
+        query =query.range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1);
+      }
+
+    const { data, error, count} = await query;
 
     if (data) {
-      res.status(200).json({
+      const totalPages = Math.ceil(count / itemsPerPage);
+
+      let response = {
         success: true,
-        data: data,
-        meta: {
+        data: data
+      }
+
+      if(page && perPage) {
+        response.meta = {
           page: pageNumber,
           perPage: itemsPerPage,
-        },
+          totalPages,
+          totalCount:count
+        }
+      }
+      res.status(200).json({
+        ...response
       });
     } else {
       throw error
@@ -248,7 +371,7 @@ router.post("/updateCustomer/:customerAuthUID", async (req, res) => {
   try {
     const { data, error } = await supabaseInstance
     .from("Customer")
-    .update({customerName,dob,genderId})
+    .update({customerName,email,mobile,dob,genderId})
     .select("*")
     .eq("customerAuthUID",customerAuthUID)
      
@@ -366,3 +489,26 @@ async function sendEmail( email) {
 
 
 module.exports = router;
+
+// console.log(
+//   arr.map(m => ({...m, Timing: m?.Timing?.find(f => f.dayId?.day)}))
+//   .map(m => {
+//     let flag = false;
+
+//     if (m?.Timing?.openTime && m?.Timing?.closeTime) {
+//       const time = moment(moment().format('hh:mm:ss'), 'hh:mm:ss');
+//       const beforeTime = moment(m?.Timing?.openTime, 'hh:mm:ss');
+//       const afterTime = moment(m?.Timing?.closeTime, 'hh:mm:ss');
+
+//       flag = time.isBetween(beforeTime, afterTime);
+//     }
+
+//     return {
+//       ...m,
+//       isOutletOpen: flag
+//     }
+//   })
+// )
+ 
+
+// console.log(moment().format('dddd'));

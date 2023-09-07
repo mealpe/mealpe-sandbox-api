@@ -1,4 +1,4 @@
-const { default: axios } = require("axios");
+const axios = require("axios").default;
 var express = require("express");
 var router = express.Router();
 var supabaseInstance = require("../../services/supabaseClient").supabase;
@@ -556,4 +556,55 @@ function saveOrderToPetpooja(restaurantId, customerAuthUID, orderId, outletId) {
 };
 
 
-module.exports = { router, saveOrderToPetpooja };
+function updateOrderStatus(orderId, updatedOrderStatus) {
+  return new Promise(async (resolve, reject) => {
+    try {
+
+      const orderQuery= await supabaseInstance.from("Order").select("*,outletId(*)").eq("orderId", orderId).maybeSingle();
+  
+      if (orderQuery?.data) {
+        const orderData = orderQuery.data;
+        if (
+          orderData?.outletId?.petPoojaAppKey &&
+          orderData?.outletId?.petPoojaAppSecret &&
+          orderData?.outletId?.petPoojaApAccessToken &&
+          orderData?.outletId?.petPoojaRestId
+        ) {
+          let payload ={
+            app_key: orderData?.outletId?.petPoojaAppKey,
+            app_secret: orderData?.outletId?.petPoojaAppSecret, 
+            access_token: orderData?.outletId?.petPoojaApAccessToken, 
+            restID: orderData?.outletId?.petPoojaRestId,
+            orderID: orderId, 
+            clientorderID: orderData?.customerAuthUID,
+            cancelReason: "",
+            status: updatedOrderStatus
+          }
+
+          const petPoojaUpdateOrderStatus = await axios.post(petpoojaconfig.config.update_order_status_api, payload);
+
+          if (petPoojaUpdateOrderStatus.data) {
+            resolve({success: true, data: petPoojaUpdateOrderStatus.data})
+          }
+
+        } else {
+          resolve({success: false, error: "Petpooja config not found."})
+        }
+      } else {
+        resolve({success: false, error: "Order not found."})
+      }
+
+    } catch (error) {
+      reject({
+        success: false,
+        error: error?.message || error
+      })
+    }
+  })
+};
+// updateOrderStatus("cf9474cc-392b-4c49-b246-a0afc1e34e47", "5").then(res => {
+//   console.log("res", res);
+// }).catch(err => {
+//   console.error(err);
+// })
+module.exports = { router, saveOrderToPetpooja ,updateOrderStatus};

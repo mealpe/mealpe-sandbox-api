@@ -258,7 +258,7 @@ router.post("/restaurentLogin", async (req, res) => {
           }
         });
       } else if(data?.user?.user_metadata?.isOutletStaff === true) {
-        const outletStaffData = await supabaseInstance.from("Outlet_Staff").select("*").eq("outletStaffAuthUId", id).maybeSingle();
+        const outletStaffData = await supabaseInstance.from("Outlet_Staff").select("*, roleId(*)").eq("outletStaffAuthUId", id).maybeSingle();
         const outletData = await supabaseInstance.from("Outlet").select("*, bankDetailsId(*), outletAdminId(*), Tax!left(*),Timing!left(*),Restaurant_category!left(*)").eq("outletId", outletStaffData.data.outletId).maybeSingle();
         res.status(200).json({
           success: true,
