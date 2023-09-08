@@ -134,15 +134,41 @@ router.post("/userlogin", async (req, res) => {
 router.get("/cafeteriaDetails/:outletId/:customerAuthUID", async (req, res) => {
   const { outletId,customerAuthUID } =req.params;
   try {
-    const { data, error } = await supabaseInstance.from("Menu_Item").select("*, item_categoryid(*, parent_category_id(*)), FavoriteMenuItem!left(*)").eq("outletId", outletId).eq("FavoriteMenuItem.customerAuthUID", customerAuthUID).eq("status",true);
+    const { data, error } = await supabaseInstance.from("Menu_Item").select("*, item_categoryid(*, parent_category_id(*)), FavoriteMenuItem!left(*)").eq("outletId", outletId).eq("FavoriteMenuItem.customerAuthUID", customerAuthUID);
     if (data) {
-      const outdetails = await supabaseInstance.from("Outlet").select("*,Menu_Categories(*)").eq("outletId", outletId);
+      const outdetData = await supabaseInstance.from("Outlet").select("*,Menu_Categories(*),isTimeExtended,Timing!left(*, dayId(*))").eq("outletId", outletId).eq("Timing.dayId.day", moment().format("dddd")).maybeSingle();
+
+      let outletdetails = {};
+
+      if (outdetData?.data) {
+        outletdetails = {
+          ...outdetData.data,
+          Timing: outdetData.data?.Timing?.find(f => f.dayId?.day)
+        }
+
+        let flag = false;
+        if (outletdetails?.Timing?.openTime && outletdetails?.Timing?.closeTime) {
+          const time = moment();
+          const beforeTime = moment(outletdetails?.Timing?.openTime, 'hh:mm:ss');
+          const afterTime = moment(outletdetails?.Timing?.closeTime, 'hh:mm:ss');
+    
+          flag = time.isBetween(beforeTime, afterTime);
+        }
+
+        if (!flag && outletdetails.isTimeExtended) {
+          flag = true;
+        }
+
+        outletdetails.isOutletOpen = flag;
+      }
+
       const taxdetails = await supabaseInstance.from("Tax").select("*").eq("outletId", outletId);
+
       res.status(200).json({
         success: true,
         message: "Data fetch succesfully",
         data: {
-           outdetails:outdetails.data,
+           outdetails:outletdetails,
            menuItems:data.map(m => ({...m, isFavoriteMenuItem: m.FavoriteMenuItem?.length > 0})),
            taxdetails:taxdetails.data,
         }
@@ -171,9 +197,14 @@ router.get("/homeData", async (req, res) => {
       let cafeteriasForYouData = cafeteriasForYouDataResponse.data.map(m => ({...m, Timing: m?.Timing?.find(f => f.dayId?.day)})).map(m => {
         let flag = false;
         if (m?.Timing?.openTime && m?.Timing?.closeTime) {
-          const time = moment(moment().format('hh:mm:ss'), 'hh:mm:ss');
+          const time = moment();
           const beforeTime = moment(m?.Timing?.openTime, 'hh:mm:ss');
           const afterTime = moment(m?.Timing?.closeTime, 'hh:mm:ss');
+
+          console.log("time => ", time);
+          console.log("beforeTime => ", beforeTime);
+          console.log("afterTime => ", afterTime);
+          console.log("time.isBetween(beforeTime, afterTime) => ", time.isBetween(beforeTime, afterTime));
     
           flag = time.isBetween(beforeTime, afterTime);
         }
@@ -189,7 +220,7 @@ router.get("/homeData", async (req, res) => {
       let PopularCafeterias = PopularCafeteriasResponse.data.map(m => ({...m, Timing: m?.Timing?.find(f => f.dayId?.day)})).map(m => {
         let flag = false;
         if (m?.Timing?.openTime && m?.Timing?.closeTime) {
-          const time = moment(moment().format('hh:mm:ss'), 'hh:mm:ss');
+          const time = moment();
           const beforeTime = moment(m?.Timing?.openTime, 'hh:mm:ss');
           const afterTime = moment(m?.Timing?.closeTime, 'hh:mm:ss');
     

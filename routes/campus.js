@@ -35,7 +35,7 @@ router.get("/getCampusList", async (req, res) => {
       .from("Campus")
       .select("*", { count: "exact" })
       .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
-      .order("created_at", { ascending: false });
+      .order("updated_at", { ascending: false });
 
     if (data) {
       const totalPages = Math.ceil(count / itemsPerPage);

@@ -211,7 +211,7 @@ router.get("/getCurrentOrder/:outletId", async (req, res) => {
     console.log("currentDate",currentDate)
     let query = supabaseInstance.rpc("get_orders_for_outlet", {outlet_uuid: outletId})
       .eq("order_schedule_date", currentDate)
-      .gte("order_schedule_time", formattedTime)
+      // .gte("order_schedule_time", formattedTime)
       .lte("order_schedule_time", formattedTimeAdd2Hours)
       .eq("order_status_id",0)
       .order("order_schedule_date",{ascending:false})
@@ -806,6 +806,30 @@ router.get("/topThreeMenuItem/:outletId", async (req, res) => {
     res.status(500).json({ success: false, error: error });
   }
 });
+
+// router.get("/realtimeOrder", function (req, res) {
+//   const {} =req.body;
+//   res.writeHead(200, {
+//     Connection: "keep-alive",
+//     "Content-Type": "text/event-stream",
+//     "Cache-Control": "no-cache",
+//   });
+//   setInterval(() => {
+//     supabaseInstance.channel('custom-insert-channel')
+//   .on(
+//     'postgres_changes',
+//     { event: 'INSERT', schema: 'public', table: 'Order', filter: 'id=eq.200' },
+//     (payload) => {
+//       res.write(
+//         "data:" +
+//           JSON.stringify({ payload})
+//       );      
+//     }
+//   )
+//   .subscribe()
+//     res.write(payload);
+//   }, 10000);
+// });
 
 module.exports = router;
 

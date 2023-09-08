@@ -19,7 +19,7 @@ router.get("/getAdminList", async (req, res) => {
       .from("Super_Admin_Users")
       .select("*", { count: "exact" })
       .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
-      .order("adminId", { ascending: true });
+      .order("updated_at", { ascending: false });
 
     if (data) {
       const totalPages = Math.ceil(count / itemsPerPage);
@@ -238,5 +238,30 @@ router.get("/getOutletAdminList", async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// router.get("/realtimeUser", function (req, res) {
+//     const {name} =req.body;
+//     res.writeHead(200, {
+//       Connection: "keep-alive",
+//       "Content-Type": "text/event-stream",
+//       "Cache-Control": "no-cache",
+//     });
+//     setInterval(() => {
+//       supabaseInstance.channel('custom-insert-channel')
+//     .on(
+//       'postgres_changes',
+//       { event: 'INSERT', schema: 'public', table: 'Demo', filter: 'id=eq.200' },
+//       (payload) => {
+//         res.write(
+//           "data:" +
+//             JSON.stringify({ payload})
+//         );      
+//       }
+//     )
+//     .subscribe()
+//       res.write(payload);
+//     }, 10000);
+// });
+  
 
 module.exports = router;

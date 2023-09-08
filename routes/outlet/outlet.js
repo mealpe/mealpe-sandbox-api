@@ -324,7 +324,7 @@ router.post("/updateOutlet/:outletId", async (req, res) => {
   delete  outletData?.isBoth;
   delete  outletData?.isBothFood;
   delete  outletData?.password;
- 
+
    try {
     if (bankDetailsData) {
       const bankDetails = await supabaseInstance.from("BankDetails").update({...bankDetailsData }).eq("bankDetailsId",bankDetailsData.bankDetailsId).select("*");
@@ -337,13 +337,21 @@ router.post("/updateOutlet/:outletId", async (req, res) => {
       }
     }
 
-    if (timeDetailsData?.length > 0) {
-      const timingDataDelete = await supabaseInstance.from("Timing").delete().eq("outletId",outletId);
+    // if (timeDetailsData?.length > 0) {
+    //   const timingDataDelete = await supabaseInstance.from("Timing").delete().eq("outletId",outletId);
+    //   for(let data of timeDetailsData){
+    //     const timingData = await supabaseInstance.from("Timing").insert({outletId, dayId: data.dayId, openTime: data.openTime, closeTime: data.closeTime }).select("*");
+    //   }
+    // }
+    if(timeDetailsData?.length > 0){
       for(let data of timeDetailsData){
-        const timingData = await supabaseInstance.from("Timing").insert({outletId, dayId: data.dayId, openTime: data.openTime, closeTime: data.closeTime }).select("*");
+      const timingData = await supabaseInstance
+      .from("Timing")
+      .update({openTime:data.openTime,closeTime:data.closeTime })
+      .eq("timeId",data.timeId)
+      .select("*");
       }
     }
-    
     
     if (outletAdminId) {
       const outletAdminDetails = await supabaseInstance.from("Outlet_Admin").update({...outletAdminId }).eq("outletAdminId",outletAdminId.outletAdminId).select("*");
