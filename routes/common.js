@@ -59,4 +59,23 @@ router.get("/getGender", async (req, res) => {
   }
 });
 
+router.get("/getBankNames", async (req, res) => {
+  try {
+    const { data, error } = await supabaseInstance
+      .from("Bank")
+      .select("*")
+
+    if (data) {
+      res.status(200).json({
+        success: true,
+        data: data,
+      });
+    } else {
+      throw error
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;

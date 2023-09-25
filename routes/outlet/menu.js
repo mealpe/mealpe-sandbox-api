@@ -57,13 +57,13 @@ router.get("/category/:outletId", async (req, res) => {
   try {
     const { data, error } = await supabaseInstance
       .from("Menu_Categories")
-      .select("*")
+      .select("*, Menu_Item!left(itemid)")
       .eq("outletId",outletId)
 
     if (data) {
       res.status(200).json({
         success: true,
-        data: data,
+        data: data.map(m => ({...m,Menu_Item:null, Menu_Item_count: m?.Menu_Item?.length || 0})),
       });
     } else {
       throw error
@@ -360,13 +360,13 @@ router.get("/getParentCategory/:outletId", async (req, res) => {
   try {
     const { data, error } = await supabaseInstance
       .from("Menu_Parent_Categories")
-      .select("*")
+      .select("*,Menu_Categories!left(Menu_Item!left(itemid))")
       .eq("outletId",outletId)
 
     if (data) {
       res.status(200).json({
         success: true,
-        data: data,
+        data: data.map(m => ({...m, Menu_Categories: null, Menu_Item_count: m?.Menu_Categories?.map(m=> m?.Menu_Item?.flat())?.flat()?.length || 0})),
       });
     } else {
       throw error
@@ -442,6 +442,28 @@ router.delete("/deleteCategory/:categoryid", async (req, res) => {
       res.status(200).json({
         success: true,
         message:"Category Deleted"
+      });
+    } else {
+      throw error
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error });
+  }
+});
+
+router.post("/deleteMenuItem/:itemid", async (req, res) => {
+  const { itemid } = req.params;
+  try {
+    const { data, error } = await supabaseInstance
+      .from("Menu_Item")
+      .update({isDelete:true})
+      .select("*")
+      .eq("itemid",itemid)
+
+    if (data) {
+      res.status(200).json({
+        success: true,
+        message:"Menu Item Updated"
       });
     } else {
       throw error

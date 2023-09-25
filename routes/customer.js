@@ -4,8 +4,10 @@ const multer = require("multer");
 const upload = multer();
 var msg91config = require("../configs/msg91Config");
 const axios = require('axios');
+// const moment = require("../services/momentService").momentIndianTimeZone;
 const moment = require("moment-timezone");
-moment().tz("Asia/Kolkata").format();
+const { sendMobileOtp, verifyMobileOtp, sendEmail ,sendMobileSMS, generateOTP} = require("../services/msf91Service");
+var cryptoJs = require("crypto-js");
 
 var supabaseInstance = require("../services/supabaseClient").supabase;
 
@@ -64,42 +66,146 @@ router.post("/signUp", async (req, res) => {
 // });
 
 
-router.post("/sendOTP", async (req, res) => {
-  const { email } = req.body;
+router.post("/sendMobileOTP", async (req, res) => {
+  //* if mobile => required[mobile];
+
+  const { mobile} = req.body;
   try {
-    sendEmail(email).then((responseData) => {
-      console.log('.then block ran: ', responseData);
-      res.status(200).json({
-        success: true,
-        data: responseData,
-      });
-    }).catch(err => {
-      console.log('.catch block ran: ', err);
-      throw err;
-    });
+     sendMobileOtp(mobile, msg91config.config.otp_template_id).then((responseData) => {
+       console.log('.then block ran: ', responseData);
+       res.status(200).json({
+         success: true,
+         data: responseData,
+       });
+     }).catch(err => {
+       console.log('.catch block ran: ', err);
+       throw err;
+     });
   } catch (error) {
     console.log(error)
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.post("/verifyOTP", async (req, res) => {
-  const { mobile, otp } = req.body;
+router.post("/verifyMobileOTP", async (req, res) => {
+  //* if mobile => required[mobile, otp];
+  //* if email  => required[email, token];
+  const { mobile, otp, email, token } = req.body;
   try {
-    verifyOTP(mobile, 123456).then((responseData) => {
-      console.log('.then block ran: ', responseData);
-      res.status(200).json({
-        success: true,
-        data: responseData,
+      verifyMobileOtp(mobile, otp).then((responseData) => {
+        console.log('.then block ran: ', responseData);
+        if (responseData?.api_success) {
+          res.status(200).json({
+            success: true,
+            data: responseData,
+          });
+        } else {
+          throw responseData;
+        }
+      }).catch(err => {
+        console.log('.catch block ran: ', err);
+        res.status(500).json({ success: false, error: err });
       });
-    }).catch(err => {
-      console.log('.catch block ran: ', err);
-      throw err;
-    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+router.post("/sendEmailOTP", async (req, res) => {
+  //* if email => required[email];
+
+  const { email_to,email_cc, email_bcc} = req.body;
+  try {
+    const token_otp = generateOTP();
+
+    //* email_to ex. => [{name: 'Recipient1 NAME', email: 'Recipient1 email'}]
+    //* email_cc ex. => [{name: 'Recipient2 NAME', email: 'Recipient2 email'}]
+    //* email_bcc ex. => [{name: 'Recipient3 NAME', email: 'Recipient3 email'}]
+    //* emailVariables ex. => {name: 'Name 1'}
+    //* template_id (string)
+
+    const _email_to = [{name: 'Customer', email: email_to}];
+    const _email_cc =  []
+    const _email_bcc =  []
+    const _template_id =msg91config.config.email_otp_template_id
+
+
+    sendEmail(_email_to, _email_cc, _email_bcc, {}, _template_id).then((responseData) => {
+      const hash = cryptoJs.AES.encrypt(token_otp.toString(), "MealPE-OTP").toString();
+       if (responseData?.api_success) {
+        res.status(200).json({
+          success: true,
+          data: responseData,
+          token: hash
+        });
+      } else {
+        throw responseData;
+      }
+     }).catch(err => {
+      //  console.log('.catch block ran: ', err);
+       res.status(500).json({ success: false, error: err });
+      });
+  } catch (error) {
+    // console.log(error)
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/verifyEmailOTP", async (req, res) => {
+  const { otp, token } = req.body;
+  try {
+      const tokenData = cryptoJs.AES.decrypt(token, "MealPE-OTP").toString(cryptoJs.enc.Utf8);
+      if (tokenData === otp) {
+          res.status(200).json({
+              success: true,
+              message: "OTP Verify", 
+          });
+      }else{
+          throw error;
+      } 
+  } catch (error) {
+      res.status(500).json({ success: false, error: error });
+  }
+});
+
+router.post("/sendMobileSMS", async (req, res) => {
+
+  const { mobile,template_id} = req.body;
+  try {
+    sendMobileSMS(mobile, template_id).then((responseData) => {
+       console.log('.then block ran: ', responseData);
+       res.status(200).json({
+         success: true,
+         data: responseData,
+       });
+     }).catch(err => {
+       console.log('.catch block ran: ', err);
+       throw err;
+     });
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// router.post("/verifyEmailOTP", async (req, res) => {
+//   //* if email  => required[email, token];
+//   const { otp, token } = req.body;
+//   try {
+//       verifyMobileOtp( otp,token).then((responseData) => {
+//         console.log('.then block ran: ', responseData);
+//         res.status(200).json({
+//           success: true,
+//           data: responseData,
+//         });
+//       }).catch(err => {
+//         console.log('.catch block ran: ', err);
+//         throw err;
+//       });
+//   } catch (error) {
+//     res.status(500).json({ success: false, error: error.message });
+//   }
+// });
 
 router.post("/userlogin", async (req, res) => {
   const { mobile, email } = req.body;
@@ -134,9 +240,9 @@ router.post("/userlogin", async (req, res) => {
 router.get("/cafeteriaDetails/:outletId/:customerAuthUID", async (req, res) => {
   const { outletId,customerAuthUID } =req.params;
   try {
-    const { data, error } = await supabaseInstance.from("Menu_Item").select("*, item_categoryid(*, parent_category_id(*)), FavoriteMenuItem!left(*)").eq("outletId", outletId).eq("FavoriteMenuItem.customerAuthUID", customerAuthUID);
+    const { data, error } = await supabaseInstance.from("Menu_Item").select("*, item_categoryid(*, parent_category_id(*)), FavoriteMenuItem!left(*)").eq("isDelete",false).eq("outletId", outletId).eq("FavoriteMenuItem.customerAuthUID", customerAuthUID);
     if (data) {
-      const outdetData = await supabaseInstance.from("Outlet").select("*,Menu_Categories(*),isTimeExtended,Timing!left(*, dayId(*))").eq("outletId", outletId).eq("Timing.dayId.day", moment().format("dddd")).maybeSingle();
+      const outdetData = await supabaseInstance.from("Outlet").select("*,Menu_Categories(*),isTimeExtended,Timing!left(*, dayId(*))").eq("outletId", outletId).eq("Timing.dayId.day", moment().tz("Asia/Kolkata").format("dddd")).maybeSingle();
 
       let outletdetails = {};
 
@@ -148,7 +254,7 @@ router.get("/cafeteriaDetails/:outletId/:customerAuthUID", async (req, res) => {
 
         let flag = false;
         if (outletdetails?.Timing?.openTime && outletdetails?.Timing?.closeTime) {
-          const time = moment();
+          const time = moment().tz("Asia/Kolkata");
           const beforeTime = moment(outletdetails?.Timing?.openTime, 'hh:mm:ss');
           const afterTime = moment(outletdetails?.Timing?.closeTime, 'hh:mm:ss');
     
@@ -185,11 +291,11 @@ router.get("/homeData", async (req, res) => {
   const { categoryId, campusId } = req.query;
   try {
     const cafeteriasForYouDataResponse = await supabaseInstance.from("Outlet").select("outletName,address,logo,headerImage,outletId,isActive, isTimeExtended, Timing!left(*, dayId(*))")
-    .eq("Timing.dayId.day", moment().format("dddd"))
+    .eq("Timing.dayId.day", moment().tz("Asia/Kolkata").format("dddd"))
     .eq("campusId",campusId).eq("isPublished",true).eq("isActive",true).limit(5);
 
     let PopularCafeteriasResponse = await supabaseInstance.from("Outlet").select("outletName,address,logo,headerImage,outletId,isActive, isTimeExtended, Timing!left(*, dayId(*))")
-    .eq("Timing.dayId.day", moment().format("dddd"))
+    .eq("Timing.dayId.day", moment().tz("Asia/Kolkata").format("dddd"))
     .eq("campusId",campusId).eq("isPublished",true).eq("isActive",true).limit(5);
 
     if (cafeteriasForYouDataResponse.data && PopularCafeteriasResponse.data) {
@@ -197,14 +303,9 @@ router.get("/homeData", async (req, res) => {
       let cafeteriasForYouData = cafeteriasForYouDataResponse.data.map(m => ({...m, Timing: m?.Timing?.find(f => f.dayId?.day)})).map(m => {
         let flag = false;
         if (m?.Timing?.openTime && m?.Timing?.closeTime) {
-          const time = moment();
+          const time = moment().tz("Asia/Kolkata");
           const beforeTime = moment(m?.Timing?.openTime, 'hh:mm:ss');
           const afterTime = moment(m?.Timing?.closeTime, 'hh:mm:ss');
-
-          console.log("time => ", time);
-          console.log("beforeTime => ", beforeTime);
-          console.log("afterTime => ", afterTime);
-          console.log("time.isBetween(beforeTime, afterTime) => ", time.isBetween(beforeTime, afterTime));
     
           flag = time.isBetween(beforeTime, afterTime);
         }
@@ -220,7 +321,7 @@ router.get("/homeData", async (req, res) => {
       let PopularCafeterias = PopularCafeteriasResponse.data.map(m => ({...m, Timing: m?.Timing?.find(f => f.dayId?.day)})).map(m => {
         let flag = false;
         if (m?.Timing?.openTime && m?.Timing?.closeTime) {
-          const time = moment();
+          const time = moment().tz("Asia/Kolkata");
           const beforeTime = moment(m?.Timing?.openTime, 'hh:mm:ss');
           const afterTime = moment(m?.Timing?.closeTime, 'hh:mm:ss');
     
@@ -259,7 +360,7 @@ router.get("/getOutletList/:campusId", async (req, res) => {
   const itemsPerPage = parseInt(perPage) || 10;
   try {
     let query = supabaseInstance
-      .rpc('get_outlet_list', { category_id: categoryId ? categoryId : null,campus_id:campusId, week_day: moment().format('dddd') }, {count: "exact"})
+      .rpc('get_outlet_list', { category_id: categoryId ? categoryId : null,campus_id:campusId, week_day: moment().tz("Asia/Kolkata").format('dddd') }, {count: "exact"})
       .eq("is_published",true)
       .eq("is_active",true)
       .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
@@ -275,7 +376,7 @@ router.get("/getOutletList/:campusId", async (req, res) => {
       let outletData = data.map(m => {
         let flag = false;
         if (m?.open_time && m?.close_time) {
-          const time = moment(moment().format('hh:mm:ss'), 'hh:mm:ss');
+          const time = moment().tz("Asia/Kolkata");
           const beforeTime = moment(m?.open_time, 'hh:mm:ss');
           const afterTime = moment(m?.close_time, 'hh:mm:ss');
     
@@ -354,8 +455,11 @@ router.get("/getCustomer/:outletId", async (req, res) => {
       // .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
       .order("created_at",{ascending:false})
 
+    let sortQuery = supabaseInstance
+      .rpc('get_distinct_customer_name', { outlet_id: outletId },{count:"exact"})
+
       if(sort){
-        query =query.order("customername",{ascending:sort == 'true' ? true : false})
+        query =sortQuery.order("customername",{ascending:sort == 'true' ? true : false})
       }
   
       if(searchText){
@@ -420,104 +524,92 @@ router.post("/updateCustomer/:customerAuthUID", async (req, res) => {
   }
 });
 
+router.get("/realtimeCustomerOrders/:orderId", function (req, res) {
+  const {orderId} =req.params;
+  res.statusCode = 200;
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("connection", "keep-alive");
+  res.setHeader("Content-Type", "text/event-stream"); 
 
-const MSG91_AUTH_KEY = msg91config.config.auth_key;
-const MSG91_OTP_ENDPOINT = 'https://control.msg91.com/api/v5/otp';
-
-async function sendOTP(mobile) {
-  try {
-    const response = await axios.post(MSG91_OTP_ENDPOINT, {
-      authkey: MSG91_AUTH_KEY,
-      mobile: mobile,
-    });
-
-    const responseData = response.data;
-    if (responseData.type === 'success') {
-      console.log('OTP sent successfully');
-      console.log(responseData);
-      return responseData;
-    } else {
-      console.error('Failed to send OTP:', responseData.message);
-      return null;
+  supabaseInstance.channel(`customer-insert-channel-${orderId}`)
+  .on(
+    'postgres_changes',
+    { event: 'UPDATE', schema: 'public', table: 'Order', filter: `orderId=eq.${orderId}` },
+    (payload) => {
+      res.write('event: updateorder\n');  //* Updagte order Event
+      res.write(`data: ${JSON.stringify(payload?.new || null)}`);
+      res.write("\n\n");    
     }
-  } catch (error) {
-    console.error('Error sending OTP:', error.message);
-    return null;
-  }
-}
+  ).subscribe((status) => {
+    console.log("subscribe status for orderId => ", orderId);
+  })
 
-const MSG91_OTP_VERIFY_ENDPOINT = 'https://api.msg91.com/api/v5/otp/verify';
+  res.write("retry: 10000\n\n");
+    req.on('close', () => {
+      supabaseInstance.channel(`customer-insert-channel-${orderId}`).unsubscribe()
+      .then(res => {
+        console.log(".then => ", res);
+      }).catch((err) => {
+        console.log(".catch => ", err);
+      }).finally(() => {
+        console.log(`${orderId} Connection closed`);
+      });
+    });
+});
 
-async function verifyOTP(mobile, otp) {
+router.get("/getLiveCustomerOrders/:customerAuthUID", async (req, res) => {
+  const { customerAuthUID} = req.params;
   try {
-    // const response = await axios.post(MSG91_OTP_VERIFY_ENDPOINT, {
-    //   authkey: MSG91_AUTH_KEY,
-    //   mobile: mobile ,
-    //   otp: 123456,
-    // });
+    let currentDate = moment().tz("Asia/Kolkata").format('YYYY-MM-DD');
 
-    // const responseData = response.data;
-    // console.log("response.data",response.data)
-    // if (responseData.type === 'success') {
-    //   console.log('OTP verification successful');
-    //   return responseData;
-    // } else {
-    //   console.error('OTP verification failed:', responseData.message);
-    //   return null;
-    // }
+    let query = supabaseInstance
+    .rpc('get_live_customer_orders', {customerauthuid:customerAuthUID,targate_date: currentDate})
+    .gte("orderstatusid",0)
+    .lt("orderstatusid",10)
 
+    const { data, error } = await query;
 
-    if (otp === 123456) {
-      console.log('OTP verification successful');
-      return {
+    if (data) {
+      res.status(200).json({
         success: true,
-        message: 'OTP verification successful'
-
-      };
+        data: data
+      });
     } else {
-      console.error('OTP verification failed:');
-      return null;
+      throw error
     }
   } catch (error) {
-    console.error('Error verifying OTP:', error.message);
-    return null;
+    console.log(error)
+    res.status(500).json({ success: false, error: error });
   }
-}
+});
 
-const MSG91_EMAIL_ENDPOINT ="https://control.msg91.com/api/v5/email/send"
-
-async function sendEmail( email) {
-  try {
-    const response = await axios.post(MSG91_EMAIL_ENDPOINT, {
-      headers: {
-        accept: 'application/json',
-        'content-type': 'application/json',
-        authkey: MSG91_AUTH_KEY,
-      },
-      data: {
-        recipients: [
-          {
-            to: [{ email: email }],
-          },
-        ],
-      },
-    });
-
-    const responseData = response.data;
-    if (responseData.type === 'success') {
-      console.log('Email sent successfully');
-      console.log(responseData);
-      return responseData;
-    } else {
-      console.error('Failed to send email:', responseData.message);
-      return null;
-    }
-  } catch (error) {
-    console.error('Error sending email:', error.message);
-    return null;
+router.post("/userGooglelogin", async (req, res) => {
+    const { token } = req.body;
+try {
+  if (!token) {
+    throw new Error("Token is missing in the request.");
   }
-}
 
+  const { data, error } = await supabaseInstance.auth.signInWithIdToken({
+    provider: 'google',
+    token: token,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  if (data) {
+    res.status(200).json({ success: true, data: data });
+  } else {
+    throw new Error("Authentication failed.");
+  }
+} catch (error) {
+  console.error("Authentication error:", error);
+  res.status(500).json({ success: false, error: error.message });
+}
+});
 
 module.exports = router;
 
@@ -540,6 +632,3 @@ module.exports = router;
 //     }
 //   })
 // )
- 
-
-// console.log(moment().format('dddd'));

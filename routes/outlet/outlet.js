@@ -1,6 +1,7 @@
 var express = require("express");
 var router = express.Router();
 var supabaseInstance = require("../../services/supabaseClient").supabase;
+var {outletSelectString} = require("../../services/supabaseCommonValues").value;
 const multer = require("multer");
 const upload = multer();
 const axios = require('axios');
@@ -47,7 +48,7 @@ router.post("/createOutlet", async (req, res) => {
       const outletId = data.user.id;
 
 
-      const bankDetails = await supabaseInstance.from("BankDetails").insert({ accountNumber: bankDetailsId?.accountNumber || null, BankName: bankDetailsId?.BankName || null, IFSCCode: bankDetailsId?.IFSCCode || null }).select().maybeSingle();
+      const bankDetails = await supabaseInstance.from("BankDetails").insert({ accountNumber: bankDetailsId?.accountNumber || null, BankName: bankDetailsId?.BankName || null, IFSCCode: bankDetailsId?.IFSCCode || null, bankId: bankDetailsId?.bankId || null }).select().maybeSingle();
       const _bankDetailsId = bankDetails.data.bankDetailsId;
 
       const outletDetails = await supabaseInstance.from("Outlet_Admin").insert({ name: outletAdminId?.name || null, mobile: outletAdminId?.mobile || null, email: outletAdminId?.email || null, address: outletAdminId?.address || null, pancard: outletAdminId?.pancard || null }).select().maybeSingle();
@@ -156,7 +157,7 @@ router.post("/upsertFssaiLicensePhoto",upload.single('file'), async (req, res) =
       const publickUrlresponse = await supabaseInstance.storage.from('fssai-license').getPublicUrl(data?.path);
       if (publickUrlresponse?.data?.publicUrl) {
         const publicUrl = publickUrlresponse?.data?.publicUrl;
-        const outletData = await supabaseInstance.from("Outlet").update({ FSSAI_License:`${publicUrl}?${new Date().getTime()}`}).eq("outletId", outletId).select("*, bankDetailsId(*), outletAdminId(*), Tax!left(*),Timing!left(*),Restaurant_category!left(*)").maybeSingle();
+        const outletData = await supabaseInstance.from("Outlet").update({ FSSAI_License:`${publicUrl}?${new Date().getTime()}`}).eq("outletId", outletId).select(outletSelectString).maybeSingle();
         res.status(200).json({
           success: true,
           data: outletData.data,
@@ -173,43 +174,32 @@ router.post("/upsertFssaiLicensePhoto",upload.single('file'), async (req, res) =
 })
 
 router.get("/getPrimaryOutletList", async (req, res) => {
-  const { page, perPage, searchText } = req.query;
+  const { page, perPage,searchText,searchCity,sortBy } = req.query;
   const pageNumber = parseInt(page) || 1;
   const itemsPerPage = parseInt(perPage) || 10;
   try {
+     let query = supabaseInstance
+      .from("Outlet")
+      .select("*, restaurantId(*), campusId(*),outletAdminId(*), bankDetailsId (*),cityId(*)), Tax!left(taxid, taxname, tax)", { count: "exact" })
+      .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
+      // .order("outletName", { ascending: true })
+      .eq("isPrimaryOutlet",true)
 
-    if(searchText){
-      const { data, error, count } = await supabaseInstance
-      .from("Outlet")
-      .select("*, restaurantId(*), campusId(*),outletAdminId(*), bankDetailsId (*),cityId(*)), Tax!left(taxid, taxname, tax)", { count: "exact" })
-      // .ilike(`outletName,${searchText}`)
-      // .or(`address.ilike.${searchText},outletName.ilike.${searchText}`)
-      .or(`address.ilike.%${searchText}%,outletName.ilike.%${searchText}%`)
-      .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
-      .order("outletName", { ascending: true })
-      .eq("isPrimaryOutlet",true)
-      if (data) {
-        const totalPages = Math.ceil(count / itemsPerPage);
-        res.status(200).json({
-          success: true,
-          data,
-          meta: {
-            page: pageNumber,
-            perPage: itemsPerPage,
-            totalPages,
-            totalCount: count,
-          },
-        });
-      }else{
-        throw error
+      if(searchText){
+        query = query.or(`address.ilike.%${searchText}%,outletName.ilike.%${searchText}%`);
       }
-    }else{
-      const { data, error, count } = await supabaseInstance
-      .from("Outlet")
-      .select("*, restaurantId(*), campusId(*),outletAdminId(*), bankDetailsId (*),cityId(*)), Tax!left(taxid, taxname, tax)", { count: "exact" })
-      .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
-      .order("outletName", { ascending: true })
-      .eq("isPrimaryOutlet",true)
+
+      if (searchCity) {
+        query = query.eq("cityId",searchCity);
+       }
+  
+       if (sortBy === "name") {
+        query = query.order("outletName", { ascending: true });
+       }else if(sortBy === "date"){
+        query = query.order("created_at", { ascending: false });
+       }
+
+      const { data, error, count } = await query;
 
       if (data) {
         const totalPages = Math.ceil(count / itemsPerPage);
@@ -226,7 +216,6 @@ router.get("/getPrimaryOutletList", async (req, res) => {
       }else{
         throw error
       }
-    }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -240,7 +229,7 @@ router.get("/getOutletListByRestaurantId/:outletId", async (req, res) => {
   try {
     let query = supabaseInstance
       .from("Outlet")
-      .select("*, restaurantId(*), campusId(*),outletAdminId(*), bankDetailsId (*),cityId(*)), Tax!left(taxid, taxname, tax)", { count: "exact" })
+      .select("*, restaurantId(*), campusId(*),outletAdminId(*), bankDetailsId (*),cityId(*),Timing(*)), Tax!left(taxid, taxname, tax)", { count: "exact" })
       .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
       .order("outletName", { ascending: true })
       .eq("outletId", outletId)
@@ -463,7 +452,7 @@ router.post("/updatePetPooja/:outletId", async (req, res) => {
     const {data, error} = await supabaseInstance
         .from("Outlet")
         .update(postbody)
-        .select("*, bankDetailsId(*), outletAdminId(*), Tax!left(*),Timing!left(*),Restaurant_category!left(*)")
+        .select(outletSelectString)
         .eq("outletId",outletId)
 
     if (data) {
@@ -498,7 +487,7 @@ router.post("/upsertLogoImage",upload.single('file'), async (req, res) => {
       const publickUrlresponse = await supabaseInstance.storage.from('logo-images').getPublicUrl(data?.path);
       if (publickUrlresponse?.data?.publicUrl) {
         const publicUrl = publickUrlresponse?.data?.publicUrl;
-        const outletData = await supabaseInstance.from("Outlet").update({ logo:`${publicUrl}?${new Date().getTime()}`}).eq("outletId", outletId).select("*, bankDetailsId(*), outletAdminId(*), Tax!left(*),Timing!left(*),Restaurant_category!left(*)").maybeSingle();
+        const outletData = await supabaseInstance.from("Outlet").update({ logo:`${publicUrl}?${new Date().getTime()}`}).eq("outletId", outletId).select(outletSelectString).maybeSingle();
 
         if(outletData?.isPrimaryOutlet === true){
           await supabaseInstance.from("Outlet").update({ logo:`${publicUrl}?${new Date().getTime()}`}).eq("primaryOutletId", outletData.primaryOutletId).select("*").maybeSingle();
@@ -535,7 +524,7 @@ router.post("/upsertHeaderImage",upload.single('file'), async (req, res) => {
       const publickUrlresponse = await supabaseInstance.storage.from('header-images').getPublicUrl(data?.path);
       if (publickUrlresponse?.data?.publicUrl) {
         const publicUrl = publickUrlresponse?.data?.publicUrl;
-        const outletData = await supabaseInstance.from("Outlet").update({ headerImage:`${publicUrl}?${new Date().getTime()}`}).eq("outletId", outletId).select("*, bankDetailsId(*), outletAdminId(*), Tax!left(*),Timing!left(*),Restaurant_category!left(*)").maybeSingle();
+        const outletData = await supabaseInstance.from("Outlet").update({ headerImage:`${publicUrl}?${new Date().getTime()}`}).eq("outletId", outletId).select(outletSelectString).maybeSingle();
         res.status(200).json({
           success: true,
           data: outletData.data,
@@ -550,6 +539,23 @@ router.post("/upsertHeaderImage",upload.single('file'), async (req, res) => {
     res.status(500).json({ success: false, error: error });
   }
 })
+
+router.get("/getOutletData/:outletId", async (req, res) => {
+  const { outletId } = req.params;
+  try {
+    const { data, error } = await supabaseInstance.from("Outlet").select(outletSelectString).eq("outletId", outletId).maybeSingle();
+    if (data) {
+      res.status(200).json({
+        success: true,
+        data: data,
+      });
+    } else {
+      throw error
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 //!!!  Delete After 2 Days [07-09-2023]
 router.get("/getOutletList/:campusId", async (req, res) => {
@@ -610,5 +616,7 @@ router.get("/getOutletList/:campusId", async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+
 
 module.exports = router;

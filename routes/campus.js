@@ -61,6 +61,7 @@ router.get("/getCampus/:cityId", async (req, res) => {
     const { data, error } = await supabaseInstance
       .from("Campus")
       .select("*")
+      .eq("isDelete",false)
       .eq("cityId",cityId)
 
     if (data) {
@@ -76,17 +77,20 @@ router.get("/getCampus/:cityId", async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
-router.post("/updateCampus/:id", async (req, res) => {
-  const { id } = req.params;
-  const { campusName, address } = req.body;
+
+router.post("/updateCampus/:campusId", async (req, res) => {
+  const { campusId } = req.params;
+  const { campusName, address,isDelete } = req.body;
   // const { name, email, mobile, role } = req.body;
 
   try {
     const { data, error } = await supabaseInstance
       .from("Campus")
-      .update({ campusName, address })
-      .eq("campusId", id)
-      .select();
+      .update({ campusName, address,isDelete})
+      .eq("campusId", campusId)
+      .select("*")
+      .maybeSingle()
+
 
     if (data) {
       res.status(200).json({
