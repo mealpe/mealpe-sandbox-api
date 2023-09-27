@@ -17,8 +17,9 @@ router.get("/getCities", async (req, res) => {
         message: "Data fetch succesfully",
         data: data,
       });
+    }else{
+      throw error;
     }
-   
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

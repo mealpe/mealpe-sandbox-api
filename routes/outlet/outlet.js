@@ -5,6 +5,8 @@ var {outletSelectString} = require("../../services/supabaseCommonValues").value;
 const multer = require("multer");
 const upload = multer();
 const axios = require('axios');
+var msg91config = require("../../configs/msg91Config");
+const { sendMobileSMS,sendEmail } = require("../../services/msf91Service");
 
 
 router.post("/createOutlet", async (req, res) => {
@@ -617,6 +619,41 @@ router.get("/getOutletList/:campusId", async (req, res) => {
   }
 });
 
+// router.post("/resetOutletPassword/:outletId", async (req, res) => {
+//   const { outletId } = req.params;
+//   try {
+//     const _password = (Math.random() + 1).toString(36).substring(4);
+//     console.log("_password==>",_password)
+//     const { data, error } = await supabaseInstance.auth.admin.updateUserById(outletId, {password: _password});
+//     if (data) {
+//       const outletData = await supabaseInstance.from("Outlet").select("*").eq("outletId", outletId).maybeSingle();
+//       if(outletData?.data){
+//         // const sendMobileSMSResponse = await sendMobileSMS([{ mobiles: outletData.data.mobile, name: outletData.data.outletName, outletId: outletId }], msg91config.config);
+//         // console.log("sendMobileSMSResponse => ", sendMobileSMSResponse);
+//         // console.log("outletData.mobile => ", outletData.data.mobile);
+//         // console.log("outletData.outletName => ", outletData.data.outletName);
+//         // console.log("outletData.outletData.email => ", outletData.data.email);
+
+//         const _email_to = [{name: outletData.data.outletName, email:  outletData.data.email}];
+//         // const _email_cc =  []
+//         // const _email_bcc =  []
+//         // const _template_id =msg91config.config.email_otp_template_id
+//         // const sendEmailResponse = await sendEmail(_email_to, _email_cc, _email_bcc, {}, _template_id);
+//         // console.log("sendEmailResponse => ", sendEmailResponse);
+//         res.status(200).json({
+//           success: true,
+//           message: "Password Send succesfully",
+//         });
+//       }else{
+//         throw outletData.error
+//       }
+//     } else {
+//       throw error;
+//     }
+//   } catch (error) {
+//     res.status(500).json({ success: false, error: error.message });
+//   }
+// });
 
 
 module.exports = router;

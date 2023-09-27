@@ -350,31 +350,41 @@ router.post("/fetchMenuCard", async (req, res) => {
   const { outletId } = req.body;
   try {
 
-    const petPoojaQuery =await supabaseInstance.from("Outlet").select("*").eq("outletId",outletId);
+    const petPoojaQuery =await supabaseInstance.from("Outlet").select("*").eq("outletId",outletId).maybeSingle();
 
-    const options = {
-      headers: {
-        'Content-Type': 'application/json',
-        'app-key': petPoojaQuery.data[0].petPoojaAppKey,
-        'app-secret': petPoojaQuery.data[0].petPoojaAppSecret,
-        'access-token': petPoojaQuery.data[0].petPoojaApAccessToken
-      },
-    };
+    if (petPoojaQuery?.data) {
+      const options = {
+        headers: {
+          'Content-Type': 'application/json',
+          'app-key': petPoojaQuery.data?.petPoojaAppKey,
+          'app-secret': petPoojaQuery.data?.petPoojaAppSecret,
+          'access-token': petPoojaQuery.data?.petPoojaApAccessToken
+        },
+      };
+  
+      const data = {
+        "restID": petPoojaQuery.data?.petPoojaRestId
+      };
+      const payloadData = await axios.post(petpoojaconfig.config.fetch_menu_api, data, options);
+  
+      if (payloadData?.data) {
 
-    const data = {
-      "restID": petPoojaQuery.data[0].petPoojaRestId
-    };
-    const payloadData = await axios.post(petpoojaconfig.config.fetch_menu_api, data, options);
+        if (!petPoojaQuery?.data?.petpoojaMenuBackup && payloadData?.data?.success === '1') {
+          const petpoojaMenuBackup = await supabaseInstance.from("Outlet").update({petpoojaMenuBackup: payloadData?.data}).select("*").eq("outletId",outletId).maybeSingle();
+        }
 
-    if (payloadData?.data) {
-      res.status(200).json({
-        success: true,
-        data: payloadData.data,
-        op: {fetch_menu_api: petpoojaconfig.config.fetch_menu_api, data, options}
-      });
+        res.status(200).json({
+          success: true,
+          data: payloadData.data,
+          op: {fetch_menu_api: petpoojaconfig.config.fetch_menu_api, data, options}
+        });
+      } else {
+        throw error;
+      }
     } else {
-      throw error;
+      res.status(500).json({ success: false, error: "Outlet not found." });
     }
+
   } catch (error) {
     console.error(error)
     res.status(500).json({ success: false, error: error });

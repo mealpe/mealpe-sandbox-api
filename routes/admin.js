@@ -54,6 +54,8 @@ router.get("/getAdminList", async (req, res) => {
           totalCount: count,
         },
       });
+    }else{
+      throw error;
     }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

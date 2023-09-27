@@ -1,7 +1,7 @@
 const { default: axios } = require("axios");
 var msg91config = require("../configs/msg91Config");
 
-async function sendMobileOtp(mobile, template_id) {
+async function sendMobileOtp(mobile, template_id,name) {
     try {
         const options = {
             method: 'POST',
@@ -11,7 +11,7 @@ async function sendMobileOtp(mobile, template_id) {
                 'content-type': 'application/json',
                 authkey: msg91config.config.auth_key
             },
-            data: { Param1: 'value1', Param2: 'value2', Param3: 'value3' }
+            data: { name: name || 'MealPe User', Param2: 'value2', Param3: 'value3' }
         };
 
         const response = await axios.default.request(options);

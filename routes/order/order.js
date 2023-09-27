@@ -559,15 +559,15 @@ router.get("/getReadyOrders/:outletId", async (req, res) => {
 
 router.get("/getHistoryOrders/:outletId", async (req, res) => {
   const { outletId } = req.params;
-  const { orderSequenceId, startDate, endDate,page, perPage,orderType  } = req.query;
+  const { orderSequenceId, startDate, endDate,page, perPage,orderType,sortType  } = req.query;
   const pageNumber = parseInt(page) || 1;
   const itemsPerPage = parseInt(perPage) || 10;
 
   try {
     let query = supabaseInstance.rpc("get_orders_for_outlet", {outlet_uuid: outletId},{count:"exact"})
     .eq("order_status_id",10)
-    .order("order_schedule_date",{ascending:false})
-    .order("order_schedule_time",{ascending:false})
+    // .order("order_schedule_date",{ascending:false})
+    // .order("order_schedule_time",{ascending:false})
     .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
 
     
@@ -579,6 +579,13 @@ router.get("/getHistoryOrders/:outletId", async (req, res) => {
       query = query.eq("is_delivery", true)
     }
 
+    if (sortType === "ascending") {
+      query = query.order("order_schedule_date",{ascending:true}).order("order_schedule_time",{ascending:true})
+    } else if(sortType === "descending") {
+        query = query.order("order_schedule_date",{ascending:false}).order("order_schedule_time",{ascending:false})
+    }else{
+      query = query.order("order_schedule_date",{ascending:false}).order("order_schedule_time",{ascending:false})
+    }
 
     if (orderSequenceId) {
       query = query.ilike("order_sequence_id", `%${orderSequenceId}%`);
@@ -660,15 +667,15 @@ router.get("/getHistoryOrders/:outletId", async (req, res) => {
 
 router.get("/getCancelledOrders/:outletId", async (req, res) => {
   const { outletId } = req.params;
-  const { page, perPage,startDate,endDate,orderSequenceId, orderType } = req.query; // Extract query parameters
+  const { page, perPage,startDate,endDate,orderSequenceId, orderType,sortType } = req.query; // Extract query parameters
   const pageNumber = parseInt(page) || 1;
   const itemsPerPage = parseInt(perPage) || 10;
   try {
 
     let query = supabaseInstance.rpc("get_orders_for_outlet", {outlet_uuid: outletId},{count:"exact"})
     .in('order_status_id', [-1, -2])
-    .order("order_schedule_date",{ascending:false})
-    .order("order_schedule_time",{ascending:false})
+    // .order("order_schedule_date",{ascending:false})
+    // .order("order_schedule_time",{ascending:false})
     .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
 
       
@@ -680,6 +687,13 @@ router.get("/getCancelledOrders/:outletId", async (req, res) => {
       query = query.eq("is_delivery", true)
     }
 
+    if (sortType === "ascending") {
+      query = query.order("order_schedule_date",{ascending:true}).order("order_schedule_time",{ascending:true})
+    } else if (sortType === "descending") {
+        query = query.order("order_schedule_date",{ascending:false}).order("order_schedule_time",{ascending:false})
+    }else{
+      query = query.order("order_schedule_date",{ascending:false}).order("order_schedule_time",{ascending:false})
+    }
 
     if (orderSequenceId) {
       query = query.ilike("order_sequence_id", `%${orderSequenceId}%`);
