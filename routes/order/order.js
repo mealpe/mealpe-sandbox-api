@@ -1105,9 +1105,9 @@ router.get("/realtimePendingOrder/:outletId", function (req, res) {
 });
 
 router.post("/orderVerifyOTP", async (req, res) => {
-  const { otp,orderId } = req.body;
+  const { otp,orderId ,outletId} = req.body;
   try {
-     const {data,error} = await supabaseInstance.from("Order").select("*").eq("orderOTP",otp).eq("orderId",orderId).maybeSingle();
+     const {data,error} = await supabaseInstance.from("Order").select("*").eq("orderOTP",otp).eq("orderId",orderId).eq("outletId",outletId).maybeSingle();
 
      if (data) {
       const readyOrderStatus =await supabaseInstance.from("Order").update({orderStatusId:10}).select("*").eq("orderId",orderId).maybeSingle();

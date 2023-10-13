@@ -9,38 +9,38 @@ router.get("/", function (req, res, next) {
 });
 
 router.get("/getAdminList", async (req, res) => {
-  const { page, perPage,status,sortBy,searchText } = req.query; // Extract query parameters
+  const { page, perPage, status, sortBy, searchText } = req.query; // Extract query parameters
   const pageNumber = parseInt(page) || 1;
   const itemsPerPage = parseInt(perPage) || 10;
 
   console.log({ page, perPage });
   try {
-   let query  =  supabaseInstance
+    let query = supabaseInstance
       .from("Super_Admin_Users")
       .select("*", { count: "exact" })
       .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
 
-     
-      if(searchText){
-        query =query.ilike('name',`%${searchText}%`)
-      }
 
-     if (status === "true") {
-      query = query.eq("isActive",true);
-     } else if(status === "false"){
-      query = query.eq("isActive",false);
-     }
+    if (searchText) {
+      query = query.ilike('name', `%${searchText}%`)
+    }
 
-     if (sortBy === "name") {
+    if (status === "true") {
+      query = query.eq("isActive", true);
+    } else if (status === "false") {
+      query = query.eq("isActive", false);
+    }
+
+    if (sortBy === "name") {
       query = query.order("name", { ascending: true });
-     }else if(sortBy === "date"){
+    } else if (sortBy === "date") {
       query = query.order("created_at", { ascending: false });
-     }else{
+    } else {
       query = query.order("updated_at", { ascending: false });
-     }
+    }
 
 
-      const { data, error, count } = await query;
+    const { data, error, count } = await query;
 
     if (data) {
       const totalPages = Math.ceil(count / itemsPerPage);
@@ -54,7 +54,7 @@ router.get("/getAdminList", async (req, res) => {
           totalCount: count,
         },
       });
-    }else{
+    } else {
       throw error;
     }
   } catch (error) {
@@ -107,7 +107,8 @@ router.post("/adminLogin", async (req, res) => {
       const { data, error } = await supabaseInstance
         .from("Super_Admin_Users")
         .select("*")
-        .match({ adminId: adminId });
+        .eq("adminId",adminId)
+        .maybeSingle();
 
       res.send({
         success: true,
@@ -161,10 +162,10 @@ router.post("/updatePassword", async (req, res) => {
 });
 
 router.post("/updateAdminPassword", async (req, res) => {
-  const { password, adminId} = req.body;
-  
+  const { password, adminId } = req.body;
+
   try {
-    const { data, error } = await supabaseInstance.auth.admin.updateUserById(adminId, {password: password});
+    const { data, error } = await supabaseInstance.auth.admin.updateUserById(adminId, { password: password });
     if (data) {
       res.status(200).json({
         success: true,
@@ -183,11 +184,11 @@ router.post("/updateAdmin/:adminId", async (req, res) => {
   const adminData = req.body;
   delete adminData?.email;
   delete adminData?.password;
-  console.log("adminData",adminData)
+  console.log("adminData", adminData)
   try {
     const { data, error } = await supabaseInstance
       .from("Super_Admin_Users")
-      .update({...adminData})
+      .update({ ...adminData })
       .eq("adminId", adminId)
       .select("*");
 
@@ -207,11 +208,11 @@ router.post("/updateAdmin/:adminId", async (req, res) => {
 
 router.post("/updateOutletAdmin/:outletAdminId", async (req, res) => {
   const { outletAdminId } = req.params;
-  const {name,mobile} = req.body;
-   try {
+  const { name, mobile } = req.body;
+  try {
     const { data, error } = await supabaseInstance
       .from("Outlet_Admin")
-      .update({name,mobile})
+      .update({ name, mobile })
       .eq("outletAdminId", outletAdminId)
       .select("*");
 
@@ -230,19 +231,27 @@ router.post("/updateOutletAdmin/:outletAdminId", async (req, res) => {
 });
 
 router.get("/getOutletAdminList", async (req, res) => {
-  const { page, perPage, searchText } = req.query; 
+  const { page, perPage, searchText ,sortBy} = req.query;
   const pageNumber = parseInt(page) || 1;
   const itemsPerPage = parseInt(perPage) || 10;
 
   try {
-   
-    let query = supabaseInstance.rpc("get_outlet_admin_list",{},{count:"exact"}).range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
 
-      if(searchText){
-        query = query.or(`name.ilike.%${searchText}%,outletname.ilike.%${searchText}%`);
-      }
+    let query = supabaseInstance.rpc("get_outlet_admin_list", {}, { count: "exact" }).range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
 
-      const { data, error, count } = await query;
+    if (searchText) {
+      query = query.or(`name.ilike.%${searchText}%,outletname.ilike.%${searchText}%`);
+    }
+
+    if (sortBy === "name") {
+      query = query.order("name", { ascending: true });
+    } else if (sortBy === "date") {
+      query = query.order("created_at", { ascending: false });
+    } else {
+      query = query.order("updated_at", { ascending: false });
+    }
+
+    const { data, error, count } = await query;
 
     if (data) {
       const totalPages = Math.ceil(count / itemsPerPage);
@@ -256,7 +265,7 @@ router.get("/getOutletAdminList", async (req, res) => {
           totalCount: count,
         },
       });
-    }else{
+    } else {
       throw error;
     }
   } catch (error) {

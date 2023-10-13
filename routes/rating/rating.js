@@ -51,6 +51,27 @@ router.get("/getRating/:outletId", async (req, res) => {
     }
 });
 
+router.get("/getRatingByCustomer/:customerAuthUID", async (req, res) => {
+  const { customerAuthUID } = req.params;
+  try {
+      const { data, error } = await supabaseInstance
+          .from("Review")
+          .select("*")
+          .eq("customerAuthUID", customerAuthUID)
+
+      if (data) {
+          res.status(200).json({
+              success: true,
+              data: data,
+          });
+      } else {
+          throw error
+      }
+  } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.delete("/deleteRating/:reviewId", async (req, res) => {
   const { reviewId } = req.params;
   try {
@@ -72,4 +93,5 @@ router.delete("/deleteRating/:reviewId", async (req, res) => {
     res.status(500).json({ success: false, error: error });
   }
 });
+
 module.exports = router;

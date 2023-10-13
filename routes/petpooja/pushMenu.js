@@ -395,169 +395,159 @@ function saveOrderToPetpooja(restaurantId, customerAuthUID, orderId, outletId) {
   return new Promise(async (resolve, reject) => {
     try {
 
-      let restaurentDataQuery= await supabaseInstance.from("Outlet").select("*").eq("outletId", outletId);
+      let restaurentDataQuery= supabaseInstance.from("Outlet").select("*").eq("outletId", outletId);
 
       // if (restaurantId) {
       //   restaurentDataQuery = supabaseInstance.from("Restaurant").select("*").eq("restaurantId", restaurantId);
       // } else if (restaurantId && outletId) {
       //   restaurentDataQuery = supabaseInstance.from("Outlet").select("*").eq("restaurantId", restaurantId).eq("outletId", outletId);
       // }
-      const restaurentData = await restaurentDataQuery;
+      const restaurentData = await restaurentDataQuery.maybeSingle();
 
-      const customerData = await supabaseInstance.from("Customer").select("*").eq("customerAuthUID", customerAuthUID).maybeSingle();
-
-      const orderData = await supabaseInstance.from("Order").select("*").eq("orderId", orderId)
-
-      let payload = {
-        app_key: petpoojaconfig.config.app_key,
-        app_secret: petpoojaconfig.config.app_secret,
-        access_token: petpoojaconfig.config.access_token,
-        orderinfo: {
-          OrderInfo: {
-            Restaurant: {
-              details: {
-                res_name: restaurentData.data[0].restaurantName,
-                address: restaurentData.data[0].address,
-                contact_information: restaurentData.data[0].mobile,
-                restID: outletId
-              }
+      if (restaurentData.data?.petPoojaAppKey && restaurentData.data?.petPoojaAppSecret && restaurentData.data?.petPoojaApAccessToken && restaurentData.data?.petPoojaRestId) {
+        const customerData = await supabaseInstance.from("Customer").select("*").eq("customerAuthUID", customerAuthUID).maybeSingle();
+  
+        const orderData = await supabaseInstance.from("Order").select("*").eq("orderId", orderId)
+  
+        let payload = {
+          app_key: restaurentData.data?.petPoojaAppKey,
+          app_secret: restaurentData.data?.petPoojaAppSecret,
+          access_token: restaurentData.data?.petPoojaApAccessToken,
+          orderinfo: {
+            OrderInfo: {
+              Restaurant: {
+                details: {
+                  res_name: restaurentData.data.restaurantName,
+                  address: restaurentData.data.address,
+                  contact_information: restaurentData.data.mobile,
+                  restID: restaurentData.data?.petPoojaRestId
+                }
+              },
+              Customer: {
+                details: {
+                  email: customerData.data.email,
+                  name: customerData.data.name,
+                  address: "",
+                  phone: customerData.data.phone,
+                  latitude: "",
+                  longitude: ""
+                }
+              },
+              Order: {
+                details: {
+                  orderID: orderId,
+                  preorder_date: "2022-01-01",
+                  preorder_time: "15:50:00",
+                  service_charge: "0",
+                  sc_tax_amount: "0",
+                  delivery_charges: "50",
+                  dc_tax_amount: "2.5",
+                  dc_gst_details: [],
+                  packing_charges: "20",
+                  pc_tax_amount: "1",
+                  pc_gst_details: [],
+                  order_type: "",
+                  ondc_bap: "",
+                  advanced_order: "N",
+                  payment_type: "COD",
+                  table_no: "",
+                  no_of_persons: "0",
+                  discount_total: "0",
+                  tax_total: "65.52",
+                  discount_type: "F",
+                  total: orderData.data[0].totalPrice,
+                  description: "",
+                  created_on: "2022-01-01 15:49:00",
+                  enable_delivery: 1,
+                  min_prep_time: 20,
+                  callback_url: "https.xyz.abc"
+                }
+              },
+              OrderItem: {
+                details: [
+                  // {
+                  //     id: orderitemData.data[0].itemId,
+                  //     name: "Garlic Bread (3Pieces)",
+                  //     gst_liability: "vendor",
+                  //     item_tax: [
+                  //         {
+                  //             id: "11213",
+                  //             name: "CGST",
+                  //             amount: "3.15"
+                  //         },
+                  //         {
+                  //             id: "20375",
+                  //             name: "SGST",
+                  //             amount: "3.15"
+                  //         }
+                  //     ],
+                  //     item_discount: "14",
+                  //     price: orderitemData.data[0].itemPrice,
+                  //     final_price: orderitemData.data[0].calculatedPrice,
+                  //     quantity: orderitemData.data[0].quantity,
+                  //     description: "",
+                  //     variation_name: "3Pieces",
+                  //     variation_id: "89058",
+                  //     AddonItem: {
+                  //         details: []
+                  //     }
+                  // }
+                ]
+              },
+              Tax: {
+                details: []
+              },
+              Discount: {}
             },
-            Customer: {
-              details: {
-                email: customerData.data.email,
-                name: customerData.data.name,
-                address: "2, Amin Society, Naranpura",
-                phone: customerData.data.phone,
-                latitude: "34.11752681212772",
-                longitude: "74.72949172653219"
-              }
-            },
-            Order: {
-              details: {
-                orderID: orderId,
-                preorder_date: "2022-01-01",
-                preorder_time: "15:50:00",
-                service_charge: "0",
-                sc_tax_amount: "0",
-                delivery_charges: "50",
-                dc_tax_amount: "2.5",
-                dc_gst_details: [],
-                packing_charges: "20",
-                pc_tax_amount: "1",
-                pc_gst_details: [],
-                order_type: "",
-                ondc_bap: "",
-                advanced_order: "N",
-                payment_type: "COD",
-                table_no: "",
-                no_of_persons: "0",
-                discount_total: "0",
-                tax_total: "65.52",
-                discount_type: "F",
-                total: orderData.data[0].totalPrice,
-                description: "",
-                created_on: "2022-01-01 15:49:00",
-                enable_delivery: 1,
-                min_prep_time: 20,
-                callback_url: "https.xyz.abc"
-              }
-            },
-            OrderItem: {
-              details: [
-                // {
-                //     id: orderitemData.data[0].itemId,
-                //     name: "Garlic Bread (3Pieces)",
-                //     gst_liability: "vendor",
-                //     item_tax: [
-                //         {
-                //             id: "11213",
-                //             name: "CGST",
-                //             amount: "3.15"
-                //         },
-                //         {
-                //             id: "20375",
-                //             name: "SGST",
-                //             amount: "3.15"
-                //         }
-                //     ],
-                //     item_discount: "14",
-                //     price: orderitemData.data[0].itemPrice,
-                //     final_price: orderitemData.data[0].calculatedPrice,
-                //     quantity: orderitemData.data[0].quantity,
-                //     description: "",
-                //     variation_name: "3Pieces",
-                //     variation_id: "89058",
-                //     AddonItem: {
-                //         details: []
-                //     }
-                // }
-              ]
-            },
-            Tax: {
-              details: []
-            },
-            Discount: {}
-          },
-          udid: "",
-          device_type: "Web"
-        }
-      }
-      const orderitemData = await supabaseInstance.from("Order_Item").select("*").eq("orderId", orderId);
-      for (let data of orderitemData.data) {
-        let petpoojaOrderObj = {
-
-          id: data.itemId,
-          name: "Garlic Bread (3Pieces)",
-          gst_liability: "vendor",
-          item_tax: [
-            {
-              id: "11213",
-              name: "CGST",
-              amount: "3.15"
-            },
-            {
-              id: "20375",
-              name: "SGST",
-              amount: "3.15"
-            }
-          ],
-          item_discount: "14",
-          price: data.itemPrice,
-          final_price: data.calculatedPrice,
-          quantity: data.quantity,
-          description: "",
-          variation_name: "3Pieces",
-          variation_id: "89058",
-          AddonItem: {
-            details: []
+            udid: "",
+            device_type: "Web"
           }
         }
-        payload.orderinfo.OrderInfo.OrderItem.details.push(petpoojaOrderObj);
+        const orderitemData = await supabaseInstance.from("Order_Item").select("*").eq("orderId", orderId);
+        for (let data of orderitemData.data) {
+          let petpoojaOrderObj = {
+  
+            id: data.itemId,
+            name: "Garlic Bread (3Pieces)",
+            gst_liability: "vendor",
+            item_tax: [
+              {
+                id: "11213",
+                name: "CGST",
+                amount: "3.15"
+              },
+              {
+                id: "20375",
+                name: "SGST",
+                amount: "3.15"
+              }
+            ],
+            item_discount: "14",
+            price: data.itemPrice,
+            final_price: data.calculatedPrice,
+            quantity: data.quantity,
+            description: "",
+            variation_name: "3Pieces",
+            variation_id: "89058",
+            AddonItem: {
+              details: []
+            }
+          }
+          payload.orderinfo.OrderInfo.OrderItem.details.push(petpoojaOrderObj);
+        }
+  
+        const payloadData = await axios.post(petpoojaconfig.config.save_order_api, payload);
+  
+        resolve({
+          success: true,
+          message: "",
+          data: payloadData?.data
+        })
+      } else {
+        resolve({success: false, error: "Petpooja config not found."})
       }
-
-      // const taxData = await supabaseInstance.from("Tax").select("*").eq("restaurantId", restaurantId);
-      // for (let data of taxData.data) {
-      //   let petpoojaTaxObj = {
-      //     id: data.taxid,
-      //     title: data.taxname,
-      //     type: "P",
-      //     price: "2.5",
-      //     tax: data.tax,
-      //     restaurant_liable_amt: "0.00"
-      //   }
-      //   payload.orderinfo.OrderInfo.Tax.details.push(petpoojaTaxObj);
-      // }
-
-      const payloadData = await axios.post(petpoojaconfig.config.save_order_api, payload);
-
-
-      resolve({
-        success: true,
-        message: "",
-        data: payloadData?.data
-      })
     } catch (error) {
-      reject({
+      resolve({
         success: false,
         error: error?.message || error
       })
@@ -605,7 +595,7 @@ function updateOrderStatus(orderId, updatedOrderStatus) {
       }
 
     } catch (error) {
-      reject({
+      resolve({
         success: false,
         error: error?.message || error
       })

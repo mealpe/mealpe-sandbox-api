@@ -82,13 +82,13 @@ router.get("/getCampus/:cityId", async (req, res) => {
 
 router.post("/updateCampus/:campusId", async (req, res) => {
   const { campusId } = req.params;
-  const { campusName, address,isDelete } = req.body;
+  const { campusName, address,isDelete,cityId } = req.body;
   // const { name, email, mobile, role } = req.body;
 
   try {
     const { data, error } = await supabaseInstance
       .from("Campus")
-      .update({ campusName, address,isDelete})
+      .update({ campusName, address,isDelete,cityId})
       .eq("campusId", campusId)
       .select("*")
       .maybeSingle()

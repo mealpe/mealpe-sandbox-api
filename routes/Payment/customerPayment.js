@@ -6,6 +6,7 @@ var supabaseInstance = require("../../services/supabaseClient").supabase;
 
 const axios = require('axios').default;
 const { URLSearchParams } = require('url');
+const { supabase } = require("../../services/supabaseClient");
 const SHA512 = require("crypto-js").SHA512;
 
 router.get('/', (req, res, next) => {
@@ -77,15 +78,16 @@ router.post('/initiate-payment', async (req, res, next) => {
                     },
                     data: encodedParams,
                 };
-
+                
+                const encodedParamsbj = encodedParams?.toString()?.split("&")?.map(m => m?.split("="))?.reduce((a, v) => ({ ...a, [v[0]]: decodeURIComponent(v[1])}), {}) ;
                 axios.request(options).then(async (initiateLinkResponse) => {
-                    const transactionUpdateResponse = await supabaseInstance.from("Transaction").update({ initiateLink_post_body: encodedParamsToObject(encodedParams), initiateLink_response: initiateLinkResponse.data }).eq("txnid", transactionResponse?.data?.txnid).select('*').maybeSingle();
+                    const transactionUpdateResponse = await supabaseInstance.from("Transaction").update({ initiateLink_post_body: encodedParamsbj, initiateLink_response: initiateLinkResponse.data }).eq("txnid", transactionResponse?.data?.txnid).select('*').maybeSingle();
                     console.log("transactionUpdateResponse in then =>", transactionUpdateResponse);
 
                     res.status(200).json({ success: true, response: initiateLinkResponse?.data })
                 }).catch(async (error) => {
                     console.error(error);
-                    const transactionUpdateResponse = await supabaseInstance.from("Transaction").update({ initiateLink_post_body: encodedParamsToObject(encodedParams), initiateLink_error: error }).eq("txnid", transactionResponse?.data?.txnid).select('*').maybeSingle();
+                    const transactionUpdateResponse = await supabaseInstance.from("Transaction").update({ initiateLink_post_body:encodedParamsbj, initiateLink_error: error }).eq("txnid", transactionResponse?.data?.txnid).select('*').maybeSingle();
                     console.log("transactionUpdateResponse in error=>", transactionUpdateResponse)
                     res.status(200).json({ success: false, response: error })
                 })
@@ -177,6 +179,18 @@ router.post('/request-refund', async (req, res, next) => {
     }
 })
 
+router.post('/get-price-breakdown', async (req, res, next) => {
+    const {outletId, basePrice} = req.body;
+    
+    try {
+        const getPriceBreakdownResponse = await getPriceBreakdown(outletId, basePrice);
+        console.log("getPriceBreakdownResponse => ", getPriceBreakdownResponse);
+
+        res.status(200).json({ success: true,  ...getPriceBreakdownResponse});
+    } catch (error) {
+        res.status(500).json({ success: false, error: error });
+    }
+})
 
 module.exports = router;
 
@@ -194,4 +208,56 @@ function encodedParamsToObject(encodedParams) {
         obj[element.value[0]] = element.value[1];
     }
     return { ...obj };
+}
+
+function getPriceBreakdown(outletId, basePrice) {
+    return new Promise(async (resolve, reject) => {
+        if (outletId && basePrice) {
+            try {
+                const outletResponse = await supabaseInstance.from("Outlet").select('*').eq("outletId", outletId).maybeSingle();
+                if (outletResponse?.data) {
+                    const outletData = outletResponse?.data;
+
+                    const foodGST = (5 * basePrice) / 100;;
+
+                    const convenienceAmount = (outletData?.convenienceFee * basePrice) / 100;
+                    const convenienceGSTAmount = (18 * convenienceAmount) / 100;
+                    const convenienceTotalAmount = convenienceAmount + convenienceGSTAmount;
+
+                    //* total amount customer pay to mealpe
+                    const totalPriceForCustomer = Math.round(basePrice + foodGST + convenienceTotalAmount);
+
+                    const commissionAmount = (outletData?.commissionFee * basePrice) / 100;
+                    const commissionGSTAmount =  (18 * commissionAmount) / 100;
+                    const commissionTotalAmount =  commissionAmount + commissionGSTAmount;
+
+                    const outletVendorAmount = Number((totalPriceForCustomer - commissionTotalAmount)?.toFixed(2));
+                    const mealpeVendorAmount = Number((totalPriceForCustomer - outletVendorAmount)?.toFixed(2));
+
+                    resolve({
+                        success: true,
+
+                        basePrice,
+                        foodGST,    
+                        convenienceAmount,
+                        convenienceGSTAmount,
+                        convenienceTotalAmount,
+                        totalPriceForCustomer,
+                        commissionAmount,
+                        commissionGSTAmount,
+                        commissionTotalAmount,
+                        mealpeVendorAmount,
+                        outletVendorAmount
+                    })
+
+                } else {
+                    reject({success: false, message: "Outlet id is wrong."});
+                }
+            } catch (error) {
+                reject({success: false, error: error});
+            }
+        } else {
+            reject({success: false, message: "Please provive valid values."});
+        }
+    })
 }
