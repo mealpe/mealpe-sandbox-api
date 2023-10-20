@@ -3,8 +3,9 @@ var router = express.Router();
 var supabaseInstance = require("../../services/supabaseClient").supabase;
 
 router.get("/getAllOutletPayment", async (req, res) => {
+    const {startDate,endDate} = req.body
     try {
-        const { data, error } = await supabaseInstance.rpc('get_all_outlet_order_payment');
+        const { data, error } = await supabaseInstance.rpc('get_all_outlet_order_payment',{start_date:startDate,end_date:endDate});
 
         if (data) {
             res.status(200).json({

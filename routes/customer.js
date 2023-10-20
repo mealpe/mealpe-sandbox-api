@@ -265,20 +265,48 @@ router.get("/cafeteriaDetails/:outletId/:customerAuthUID", async (req, res) => {
           }
         }
 
-        let flag = false;
+        let todayflag = false;
+        let tomorrowflag = false;
+        let Overmorrowflag = false;
         if (outletdetails?.Timing?.Today?.openTime && outletdetails?.Timing?.Today?.closeTime) {
           const time = moment().tz("Asia/Kolkata");
           const beforeTime = moment.tz(outletdetails?.Timing?.Today?.openTime, 'HH:mm:ss', 'Asia/Kolkata');
           const afterTime = moment.tz(outletdetails?.Timing?.Today?.closeTime, 'HH:mm:ss', 'Asia/Kolkata');
 
-          flag = time.isBetween(beforeTime, afterTime);
+          todayflag = time.isBetween(beforeTime, afterTime);
         }
 
-        if (!flag && outletdetails.isTimeExtended) {
-          flag = true;
+        if (!todayflag && outletdetails.isTimeExtended) {
+          todayflag = true;
         }
 
-        outletdetails.isOutletOpen = flag;
+        if (outletdetails?.Timing?.Tomorrow?.openTime && outletdetails?.Timing?.Tomorrow?.closeTime) {
+          const time = moment().tz("Asia/Kolkata");
+          const beforeTime = moment.tz(outletdetails?.Timing?.Tomorrow?.openTime, 'HH:mm:ss', 'Asia/Kolkata');
+          const afterTime = moment.tz(outletdetails?.Timing?.Tomorrow?.closeTime, 'HH:mm:ss', 'Asia/Kolkata');
+
+          tomorrowflag = time.isBetween(beforeTime, afterTime);
+        }
+
+        if (!tomorrowflag && outletdetails.isTimeExtended) {
+          tomorrowflag = true;
+        }
+
+        if (outletdetails?.Timing?.Overmorrow?.openTime && outletdetails?.Timing?.Overmorrow?.closeTime) {
+          const time = moment().tz("Asia/Kolkata");
+          const beforeTime = moment.tz(outletdetails?.Timing?.Overmorrow?.openTime, 'HH:mm:ss', 'Asia/Kolkata');
+          const afterTime = moment.tz(outletdetails?.Timing?.Overmorrow?.closeTime, 'HH:mm:ss', 'Asia/Kolkata');
+
+          Overmorrowflag = time.isBetween(beforeTime, afterTime);
+        }
+
+        if (!Overmorrowflag && outletdetails.isTimeExtended) {
+          Overmorrowflag = true;
+        }
+
+        outletdetails.todayisOutletOpen = todayflag;
+        outletdetails.tomorrowisOutletOpen = tomorrowflag;
+        outletdetails.OvermorrowisOutletOpen = Overmorrowflag;
       }
 
       const taxdetails = await supabaseInstance.from("Tax").select("*").eq("outletId", outletId);
