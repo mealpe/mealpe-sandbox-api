@@ -194,6 +194,8 @@ router.get("/getItemList/:outletId", async (req, res) => {
       .from("Menu_Item")
       .select("*")
       .eq("outletId", outletId)
+      .order("itemSequenceId",{ascending:true})
+      .eq("isDelete",false)
      
     if (data) {
       res.status(200).json({

@@ -33,7 +33,7 @@ router.get("/getCampusList", async (req, res) => {
   try {
     const { data, error, count } = await supabaseInstance
       .from("Campus")
-      .select("*", { count: "exact" })
+      .select("*,cityId(*)", { count: "exact" })
       .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
       .order("updated_at", { ascending: false });
 

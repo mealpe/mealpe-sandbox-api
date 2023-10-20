@@ -9,12 +9,12 @@ var msg91config = require("../../configs/msg91Config");
 
 
 router.post("/createOrder", async (req, res) => {
-  const { customerAuthUID, outletId, restaurantId, isDineIn, isPickUp, totalPrice, paymentId, items, pickupTime, orderPriceBreakDown,isScheduleNow,txnid,basePrice } = req.body;
+  const { customerAuthUID, outletId, restaurantId, isDineIn, isPickUp, totalPrice, paymentId, items, pickupTime, orderPriceBreakDown,isScheduleNow,txnid,basePrice,isDelivery,address } = req.body;
   try {
     const orderOTP = generateOTP();
     const { data, error } = await supabaseInstance
       .from("Order")
-      .insert({ customerAuthUID, outletId, isDineIn, isPickUp, totalPrice, paymentId, orderPriceBreakDown, orderOTP,isScheduleNow,txnid ,basePrice})
+      .insert({ customerAuthUID, outletId, isDineIn, isPickUp, totalPrice, paymentId, orderPriceBreakDown, orderOTP,isScheduleNow,txnid ,basePrice,isDelivery})
       .select("*,outletId(outletName,logo,outletId), customerAuthUID(*)");
 
     if (data) {
@@ -32,6 +32,13 @@ router.post("/createOrder", async (req, res) => {
         .from("Order_Schedule")
         .insert({ orderId: orderId, scheduleDate: pickupTime.orderDate, scheduleTime: pickupTime.time })
         .select("*")
+
+        if(isDelivery === true){
+        const deliveryResponse = await supabaseInstance
+        .from("DeliveryAddress")
+        .insert({ orderId: orderId,outletId,customerAuthUID,address:address})
+        .select("*")
+        }
 
 
       saveOrderToPetpooja(restaurantId, customerAuthUID, orderId, outletId).then(async (saveOrderToPetpoojaResponse) => {
@@ -136,7 +143,7 @@ router.get("/getAllOrder/:outletId", async (req, res) => {
 router.get("/getOrder/:orderId", async (req, res) => {
   const { orderId } = req.params;
   try {
-    const {data,error} = await supabaseInstance.from("Order").select("*,customerAuthUID(*),outletId(outletId,outletName,logo,address),Order_Item(*,Menu_Item(itemname,item_image_url)),Order_Schedule(*),orderStatusId(*))").eq("orderId", orderId).maybeSingle();
+    const {data,error} = await supabaseInstance.from("Order").select("*,customerAuthUID(*,DeliveryAddress(address)),outletId(outletId,outletName,logo,address),Order_Item(*,Menu_Item(itemname,item_image_url)),Order_Schedule(*),orderStatusId(*))").eq("orderId", orderId).maybeSingle();
     if (data) {
       res.status(200).json({
         success: true,
@@ -154,11 +161,11 @@ router.get("/getOrder/:orderId", async (req, res) => {
 router.get("/getOrderByCustomerAuthId/:customerAuthUID", async (req, res) => {
   const { customerAuthUID } = req.params;
   try {
-    const { data, error } = await supabaseInstance.from("Order").select("*,outletId(outletName,logo),Order_Item(*),Order_Schedule(*),orderStatusId(*))").eq("customerAuthUID", customerAuthUID).order("created_at",{ascending:false})
+    const { data, error } = await supabaseInstance.from("Order").select("*,outletId(outletId,headerImage,outletName,logo,Review!left(*)),Order_Item(*),Order_Schedule(*),orderStatusId(*))").eq("customerAuthUID", customerAuthUID).eq("outletId.Review.customerAuthUID",customerAuthUID).order("created_at",{ascending:false})
     if (data) {
       res.status(200).json({
         success: true,
-        data: data,
+        data: data.map(m => ({ ...m, isReview: m?.outletId?.Review?.length > 0 })),
       });
     } else {
       throw error

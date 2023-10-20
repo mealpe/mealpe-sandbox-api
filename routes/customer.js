@@ -221,7 +221,7 @@ router.post("/userlogin", async (req, res) => {
   try {
     let loginQuery;
     if (mobile) {
-      loginQuery = supabaseInstance.from("Customer").select(customerSlectString).eq("mobile", mobile);
+      loginQuery = supabaseInstance.from("Customer").select(customerSlectString).eq("mobile", mobile).eq("isDelete", false);
     } else if (email) {
       loginQuery = supabaseInstance.from("Customer").select(customerSlectString).eq("email", email);
     }
@@ -268,8 +268,8 @@ router.get("/cafeteriaDetails/:outletId/:customerAuthUID", async (req, res) => {
         let flag = false;
         if (outletdetails?.Timing?.Today?.openTime && outletdetails?.Timing?.Today?.closeTime) {
           const time = moment().tz("Asia/Kolkata");
-          const beforeTime = moment(outletdetails?.Timing?.Today?.openTime, 'hh:mm:ss').tz("Asia/Kolkata");
-          const afterTime = moment(outletdetails?.Timing?.Today?.closeTime, 'hh:mm:ss').tz("Asia/Kolkata");
+          const beforeTime = moment.tz(outletdetails?.Timing?.Today?.openTime, 'HH:mm:ss', 'Asia/Kolkata');
+          const afterTime = moment.tz(outletdetails?.Timing?.Today?.closeTime, 'HH:mm:ss', 'Asia/Kolkata');
 
           flag = time.isBetween(beforeTime, afterTime);
         }
@@ -326,8 +326,8 @@ router.get("/cafeteriaDetails/:outletId/:customerAuthUID", async (req, res) => {
 //         let flag = false;
 //         if (m?.Timing?.Today?.openTime && m?.Timing?.Today?.closeTime) {
 //           const time = moment().tz("Asia/Kolkata");
-//           const beforeTime = moment(m?.Timing?.Today?.openTime, 'hh:mm:ss');
-//           const afterTime = moment(m?.Timing?.Today?.closeTime, 'hh:mm:ss');
+//           const beforeTime = moment(m?.Timing?.Today?.openTime, 'HH:mm:ss');
+//           const afterTime = moment(m?.Timing?.Today?.closeTime, 'HH:mm:ss');
 
 //           flag = time.isBetween(beforeTime, afterTime);
 //         }
@@ -353,8 +353,8 @@ router.get("/cafeteriaDetails/:outletId/:customerAuthUID", async (req, res) => {
 //         let flag = false;
 //         if (m?.Timing?.Today?.openTime && m?.Timing?.Today?.closeTime) {
 //           const time = moment().tz("Asia/Kolkata");
-//           const beforeTime = moment(m?.Timing?.Today?.openTime, 'hh:mm:ss');
-//           const afterTime = moment(m?.Timing?.Today?.closeTime, 'hh:mm:ss');
+//           const beforeTime = moment(m?.Timing?.Today?.openTime, 'HH:mm:ss');
+//           const afterTime = moment(m?.Timing?.Today?.closeTime, 'HH:mm:ss');
 
 //           flag = time.isBetween(beforeTime, afterTime);
 //         }
@@ -391,7 +391,7 @@ router.get("/homeData", async (req, res) => {
     let today = moment().tz("Asia/Kolkata").format("dddd");
     let tomorrow = moment().tz("Asia/Kolkata").add(1, 'days').format("dddd");
     let overmorrow = moment().tz("Asia/Kolkata").add(2, 'days').format("dddd");
-    let query = supabaseInstance.rpc('get_customer_home_data', { campus_id:campusId, today,tomorrow,overmorrow}).limit(5);
+    let query = supabaseInstance.rpc('get_customer_home_data', { campus_id: campusId, today, tomorrow, overmorrow }).limit(5);
 
     const get_customer_home_dataResponse = await query;
 
@@ -401,12 +401,13 @@ router.get("/homeData", async (req, res) => {
         const today_time = m?.time_day?.find(f => f.Day === today);
         if (today_time?.openTime && today_time?.closeTime) {
           const time = moment().tz("Asia/Kolkata");
-          const beforeTime = moment(today_time?.openTime, 'hh:mm:ss').tz("Asia/Kolkata");
-          const afterTime = moment(today_time?.closeTime, 'hh:mm:ss').tz("Asia/Kolkata");
-          console.log("time==>",time);
-          console.log("beforeTime==>",beforeTime);
-          console.log("afterTime==>",afterTime);
-  
+          const beforeTime = moment.tz(today_time?.openTime, 'HH:mm:ss', 'Asia/Kolkata');
+          const afterTime = moment.tz(today_time?.closeTime, 'HH:mm:ss', 'Asia/Kolkata');
+          console.log("time Asia  ==>", time);
+          console.log("beforeTime Asia  ==>", beforeTime);
+          console.log("afterTime Asia  ==>", afterTime);
+          console.log('\n');
+
           flag = time.isBetween(beforeTime, afterTime);
         }
         if (!flag && m.isTimeExtended) {
@@ -421,13 +422,13 @@ router.get("/homeData", async (req, res) => {
             Overmorrow: m?.time_day?.find(f => f.Day === overmorrow),
           }
         }
-      })  
+      })
 
       res.status(200).json({
         success: true,
         data: {
-          cafeteriasForYouData:home_data,
-          PopularCafeterias:home_data
+          cafeteriasForYouData: home_data,
+          PopularCafeterias: home_data
         }
       });
     } else {
@@ -436,6 +437,8 @@ router.get("/homeData", async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+
+  // console.log("1 ==> ", moment.tz("10:00:00", 'HH:mm:ss', "Asia/Kolkata"));
 });
 
 router.get("/getOutletList/:campusId", async (req, res) => {
@@ -448,9 +451,9 @@ router.get("/getOutletList/:campusId", async (req, res) => {
     let today = moment().tz("Asia/Kolkata").format("dddd");
     let tomorrow = moment().tz("Asia/Kolkata").add(1, 'days').format("dddd");
     let overmorrow = moment().tz("Asia/Kolkata").add(2, 'days').format("dddd");
-    console.log("today,tomorrow,overmorrow",today,tomorrow,overmorrow)
+    console.log("today,tomorrow,overmorrow", today, tomorrow, overmorrow)
     let query = supabaseInstance
-      .rpc('get_outlet_list', { category_id: categoryId ? categoryId : null, campus_id: campusId,today,tomorrow,overmorrow}, { count: "exact" })
+      .rpc('get_outlet_list', { category_id: categoryId ? categoryId : null, campus_id: campusId, today, tomorrow, overmorrow }, { count: "exact" })
       .eq("is_published", true)
       .eq("is_active", true)
       .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
@@ -469,11 +472,11 @@ router.get("/getOutletList/:campusId", async (req, res) => {
         const today_time = m?.time_day?.find(f => f.Day === today);
         if (today_time?.openTime && today_time?.closeTime) {
           const time = moment().tz("Asia/Kolkata");
-          const beforeTime = moment(today_time?.openTime, 'hh:mm:ss').tz("Asia/Kolkata");
-          const afterTime = moment(today_time?.closeTime, 'hh:mm:ss').tz("Asia/Kolkata");
-          console.log("time==>",time);
-          console.log("beforeTime==>",beforeTime);
-          console.log("afterTime==>",afterTime);
+          const beforeTime = moment.tz(today_time?.openTime, 'HH:mm:ss', 'Asia/Kolkata');
+          const afterTime = moment.tz(today_time?.closeTime, 'HH:mm:ss', 'Asia/Kolkata');
+          console.log("time==>", time);
+          console.log("beforeTime==>", beforeTime);
+          console.log("afterTime==>", afterTime);
           flag = time.isBetween(beforeTime, afterTime);
         }
 
@@ -636,7 +639,7 @@ router.get("/realtimeCustomerOrders/:orderId", function (req, res) {
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'Order', filter: `orderId=eq.${orderId}` },
       (payload) => {
-        res.write(`data: ${JSON.stringify({updateorder: payload?.new || null})}\n\n`);
+        res.write(`data: ${JSON.stringify({ updateorder: payload?.new || null })}\n\n`);
       }
     ).subscribe((status) => {
       console.log("subscribe status for orderId => ", orderId);
@@ -696,12 +699,13 @@ router.post("/userGooglelogin", async (req, res) => {
     console.log("error==>", error)
 
     if (data?.user?.id) {
-      const customerData = await supabaseInstance.from("Customer").select(customerSlectString).eq("customerAuthUID", data.user.id).maybeSingle();
+      const customerData = await supabaseInstance.from("Customer").select(customerSlectString).eq("isDelete", false).eq("customerAuthUID", data.user.id).maybeSingle();
       console.log("customerData=>", customerData)
       if (customerData.data) {
         res.status(200).json({ success: true, data: customerData.data });
       } else {
-        const customerResponse = await supabaseInstance.from("Customer").insert({ email: data.user.email, mobile: data?.user?.phone ? +data.user.phone : null, customerName: data.user?.user_metadata?.full_name, customerAuthUID: data.user.id }).select(customerSlectString).maybeSingle();
+        // mobile: data?.user?.phone ? +data.user.phone : null,
+        const customerResponse = await supabaseInstance.from("Customer").insert({ email: data.user.email, customerName: data.user?.user_metadata?.full_name, customerAuthUID: data.user.id }).select(customerSlectString).maybeSingle();
         if (customerResponse.data) {
           res.status(200).json({ success: true, data: customerResponse.data });
         } else {
@@ -719,21 +723,42 @@ router.post("/userGooglelogin", async (req, res) => {
 
 router.post("/updateMobile", async (req, res) => {
   const { mobile, customerAuthUID } = req.body;
-
   console.log({ mobile, customerAuthUID });
-
   try {
-    const customerResponse = await supabaseInstance.from("Customer").update({ mobile }).eq("customerAuthUID", customerAuthUID).select(customerSlectString).maybeSingle();
-    // console.log("customerResponse => ", customerResponse);
-    if (customerResponse.data) {
-      res.status(200).json({
-        success: true,
-        message: "Mobile added Successfully.",
-        data: customerResponse.data
+    supabaseInstance.auth.admin.updateUserById(customerAuthUID, { phone: mobile }).then(async (updateUserByIdResponse) => {
+      if (updateUserByIdResponse?.data?.user) {
+        const customerResponse = await supabaseInstance.from("Customer").update({ mobile }).eq("customerAuthUID", customerAuthUID).select(customerSlectString).maybeSingle();
+        if (customerResponse.data) {
+          res.status(200).json({
+            success: true,
+            message: "Mobile added Successfully.",
+            data: customerResponse.data
+          });
+        } else {
+          throw customerResponse.error;
+        }
+      } else {
+        console.error(updateUserByIdResponse.error);
+        if (updateUserByIdResponse?.error?.message.includes("duplicate key value violates unique constraint")) {
+          res.status(500).json({
+            success: false,
+            message: "Mobile number already use someone.",
+          });
+        } else {
+          res.status(500).json({
+            success: false,
+            message: updateUserByIdResponse.error.message,
+          });
+        }
+      }
+    }).catch((updateUserByIdError) => {
+      console.error("updateUserByIdError => ", updateUserByIdError);
+      
+      res.status(500).json({
+        success: false,
+        message: "Something went wrong."
       });
-    } else {
-      throw customerResponse.error;
-    }
+    })
   } catch (error) {
     res.status(500).json({ success: false, error: error?.message || error });
   }
@@ -792,5 +817,90 @@ router.post("/otplessUser", async (req, res) => {
   }
 });
 
+router.post("/userApplelogin", async (req, res) => {
+  const { token, nonce } = req.body;
+  try {
+    if (!token) {
+      throw new Error("Token is missing in the request.");
+    }
+
+    const { data, error } = await supabaseInstance.auth.signInWithIdToken({
+      provider: 'apple',
+      token: token,
+      nonce: nonce,
+    });
+    console.log("data=>", data)
+
+
+    if (data?.user?.id) {
+      const customerData = await supabaseInstance.from("Customer").select(customerSlectString).eq("customerAuthUID", data.user.id).maybeSingle();
+      console.log("customerData=>", customerData)
+      if (customerData.data) {
+        res.status(200).json({ success: true, data: customerData.data });
+      } else {
+        var emailStr = data.user.email;
+        var name = data.user?.user_metadata?.full_name || null;
+
+        if (name) {
+          var nameMatch = emailStr.match(/^([^@]*)@/);
+          name = nameMatch ? nameMatch[1] : null;
+          name = name.replace(/[^A-Za-z]/g, ' ');
+        }
+
+        const customerResponse = await supabaseInstance.from("Customer").insert({ email: emailStr, mobile: data?.user?.phone ? +data.user.phone : null, customerName: name, customerAuthUID: data.user.id }).select(customerSlectString).maybeSingle();
+        if (customerResponse.data) {
+          res.status(200).json({ success: true, data: customerResponse.data });
+        } else {
+          res.status(500).json({ success: false, error: customerResponse.error });
+        }
+      }
+    } else {
+      throw error;
+    }
+  } catch (error) {
+    console.error("Authentication error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/userDeletion", async (req, res) => {
+  const { customerAuthUID } = req.body;
+
+  console.log({ customerAuthUID });
+
+  try {
+    const authDeleteResponse = await supabaseInstance.auth.admin.deleteUser(customerAuthUID, false);
+
+    if (authDeleteResponse.data) {
+      await supabaseInstance.from("Customer").update({ isDelete: true }).eq("customerAuthUID", customerAuthUID).maybeSingle();
+      res.status(200).json({
+        success: true,
+        message: "User delete successfully.",
+      });
+    } else {
+      throw customerResponse.error;
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error?.message || error });
+  }
+})
+
 
 module.exports = router;
+
+
+// const applepubliKeyURL ='https://appleid.apple.com/auth/keys';
+
+// axios.get(applepubliKeyURL).then((response) => {
+//   const applePublicKeys = response.data.keys;
+//   console.log("applePublicKeys=>",applePublicKeys);
+//   const decodeToken = jwt.verify('hfsdgcdvdhs',applePublicKeys[0]);
+//   console.log("decodeToken=>",decodeToken)
+
+// })
+
+
+
+// supabaseInstance.auth.admin.updateUserById('9cfb044a-28b1-4135-afdb-2f0877c78d31', { phone: '9999999992' }).then(res => {
+//   console.log("res==>", res)
+// })

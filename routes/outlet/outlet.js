@@ -36,7 +36,9 @@ router.post("/createOutlet", async (req, res) => {
     FSSAI_number,
     convenienceFee,
     commissionFee,
-    bankLabel
+    bankLabel,
+    isVeg,
+    isNonVeg
   } = req.body;
   try {
     const { data, error } = await supabaseInstance.auth.signUp(
@@ -74,7 +76,9 @@ router.post("/createOutlet", async (req, res) => {
         cityId,
         isPrimaryOutlet,
         primaryOutletId,
-        isGSTShow
+        isGSTShow,
+        isVeg,
+        isNonVeg
       }
       if (openTime) {
         postObject.openTime = openTime;
@@ -98,7 +102,7 @@ router.post("/createOutlet", async (req, res) => {
       if (FSSAI_number) {
         postObject.FSSAI_number = FSSAI_number;
       }
-      
+
       if (convenienceFee) {
         postObject.convenienceFee = convenienceFee;
       }
@@ -126,13 +130,15 @@ router.post("/createOutlet", async (req, res) => {
 
       const outletRole = await supabaseInstance
         .from("Outlet_Role")
-        .insert({ role: "Order Management", outletId: outletId, access: [
-          "Restaurants",
-          "Payments",
-          "Users",
-          "Dashboard",
-          "Configuration"
-        ]})
+        .insert({
+          role: "Order Management", outletId: outletId, access: [
+            "Restaurants",
+            "Payments",
+            "Users",
+            "Dashboard",
+            "Configuration"
+          ]
+        })
         .select("*")
 
       for (let outletItem of Restaurant_category) {
@@ -174,10 +180,10 @@ router.post("/createOutlet", async (req, res) => {
 router.post("/upsertFssaiLicensePhoto", upload.single('file'), async (req, res) => {
   const { outletId } = req.body;
   // console.log("outletId--->", outletId)
-  
+
   try {
 
-   let query =  supabaseInstance
+    let query = supabaseInstance
       .storage
       .from('fssai-license')
 
@@ -360,7 +366,7 @@ router.post("/updateOutlet/:outletId", async (req, res) => {
   delete outletData?.isBothFood;
   delete outletData?.password;
 
-  console.log("outletData",outletData.convenienceFee)
+  console.log("outletData", outletData.convenienceFee)
 
   try {
     if (bankDetailsData) {
@@ -405,7 +411,7 @@ router.post("/updateOutlet/:outletId", async (req, res) => {
     } else {
       delete outletData.commissionFee;
     }
-    
+
     if (req?.body?.packaging_charge) {
       outletData.packaging_charge = req?.body?.packaging_charge;
     } else {
@@ -635,6 +641,96 @@ router.get("/getOutletData/:outletId", async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+router.post("/pushMenuData/:outletId", async (req, res) => {
+  const { outletId } = req.params
+  const { category, subCategory, item } = req.body;
+
+  let serverCategory = [];
+  let serverSubCategory = [];
+  let serverItem = [];
+  
+  try {
+    if (category?.length > 0) {
+      for (const categoryItem of category) {
+        let postData = {
+          parentCategoryName: categoryItem?.parentCategoryName,
+          outletId,
+          status: categoryItem?.status,
+          parent_category_image_url: categoryItem?.parent_category_image_url || null,
+          isFromPrimaryOutletId: true
+        }
+
+        const categoryAddResponse = await supabaseInstance.from("Menu_Parent_Categories").insert({ ...postData }).select("*").maybeSingle();
+        if (categoryAddResponse.data) {
+          categoryItem.serverResponse = categoryAddResponse.data;
+          serverCategory.push(categoryAddResponse.data)
+        }
+      }
+    }
+
+    if (subCategory?.length > 0) {
+      for (const subcategoryItem of subCategory) {
+        let postData = {
+          categoryname: subcategoryItem.categoryname,
+          outletId,
+          category_image_url: subcategoryItem?.category_image_url || null,
+          status: subcategoryItem.status,
+          isFromPrimaryOutletId: true,
+          parent_category_id: category?.find(f => f?.parent_category_id === subcategoryItem?.parent_category_id)?.serverResponse?.parent_category_id || null
+        };
+
+        const subCategoryData = await supabaseInstance.from("Menu_Categories").insert(postData).select("*").maybeSingle();
+        if (subCategoryData.data) {
+          subcategoryItem.serverResponse = subCategoryData.data;
+          serverSubCategory.push(subCategoryData.data)
+        }
+      }
+    }
+
+    if (item?.length > 0) {
+      for (const itemItem of item) {
+        const postData = {
+          outletId,
+          itemname: itemItem.itemname,
+          attributeid: itemItem.attributeid || null,
+          price: itemItem.price,
+          itemdescription: itemItem.itemdescription,
+          itemdescription: itemItem.itemdescription,
+          minimumpreparationtime: itemItem.minimumpreparationtime,
+          kcal: itemItem.kcal,
+          servinginfo: itemItem.servinginfo,
+          dietary_restriction_id: itemItem.dietary_restriction_id,
+          spice_level_id: itemItem.spice_level_id || null,
+          status: itemItem.status,
+          isDelete: itemItem.isDelete,
+          isFromPrimaryOutletId: true,
+          item_categoryid: subCategory?.find(f => f?.categoryid === itemItem?.item_categoryid)?.serverResponse?.categoryid || null
+        }
+
+        const menuItemData = await supabaseInstance.from("Menu_Item").insert(postData).select("*").maybeSingle();
+        if (menuItemData.data) {
+          serverItem.push(menuItemData.data);
+        } else {
+          console.log(menuItemData);
+        }
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        menuItemData: serverItem || [],
+        categoryData: serverCategory || [],
+        subCategoryData: serverSubCategory || []
+      }
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ success: false, error: error.message || error });
+  }
+
+})
 
 
 // router.post("/resetOutletPassword/:outletId", async (req, res) => {

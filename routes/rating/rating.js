@@ -4,12 +4,12 @@ var supabaseInstance = require("../../services/supabaseClient").supabase;
 
 router.post("/createRating", async (req, res) => {
 
-    const { customerAuthUID, outletId, message, star  } = req.body;
+    const { customerAuthUID, outletId, message, star, orderId  } = req.body;
     try {
     
       const { data, error } = await supabaseInstance
         .from("Review")
-        .insert({customerAuthUID, outletId, message, star})
+        .insert({customerAuthUID, outletId, message, star, orderId})
         .select("*")
   
       if (data) {

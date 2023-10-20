@@ -55,8 +55,8 @@ router.get("/getfavoriteMenuItem/:customerAuthUID", async (req, res) => {
       let flag = false;
       if (openTime && closeTime) {
         const time = moment().tz("Asia/Kolkata");
-        const beforeTime = moment(openTime, 'hh:mm:ss').tz("Asia/Kolkata");
-        const afterTime = moment(closeTime, 'hh:mm:ss').tz("Asia/Kolkata");
+        const beforeTime = moment.tz(openTime, 'HH:mm:ss', 'Asia/Kolkata');
+        const afterTime = moment.tz(closeTime, 'HH:mm:ss', 'Asia/Kolkata');
 
         flag = time.isBetween(beforeTime, afterTime);
       }
