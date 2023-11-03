@@ -50,20 +50,52 @@ router.get("/getfavoriteMenuItem/:customerAuthUID", async (req, res) => {
 
       const openTime = time?.itemid?.outletId?.Timing?.['Today']?.openTime
       const closeTime = time?.itemid?.outletId?.Timing?.['Today']?.closeTime
+      
+      const TomorrowopenTime = time?.itemid?.outletId?.Timing?.['Tomorrow']?.openTime
+      const TomorrowcloseTime = time?.itemid?.outletId?.Timing?.['Tomorrow']?.closeTime
+
+      const OvermorrowopenTime = time?.itemid?.outletId?.Timing?.['Overmorrow']?.openTime
+      const OvermorrowcloseTime = time?.itemid?.outletId?.Timing?.['Overmorrow']?.closeTime
       const isTimeExtended = time?.itemid?.outletId?.isTimeExtended
 
-      let flag = false;
+      let todayflag = false;
+      let tomorrowflag = false;
+      let overmorrowflag = false;
       if (openTime && closeTime) {
         const time = moment().tz("Asia/Kolkata");
         const beforeTime = moment.tz(openTime, 'HH:mm:ss', 'Asia/Kolkata');
         const afterTime = moment.tz(closeTime, 'HH:mm:ss', 'Asia/Kolkata');
 
-        flag = time.isBetween(beforeTime, afterTime);
+        todayflag = time.isBetween(beforeTime, afterTime);
       }
-      if (!flag && isTimeExtended) {
-        flag = true;
+      if (!todayflag && isTimeExtended) {
+        todayflag = true;
       }
-      time.isOutletOpen = flag
+
+      if (TomorrowopenTime && TomorrowcloseTime) {
+        const time = moment().tz("Asia/Kolkata");
+        const beforeTime = moment.tz(TomorrowopenTime, 'HH:mm:ss', 'Asia/Kolkata');
+        const afterTime = moment.tz(TomorrowcloseTime, 'HH:mm:ss', 'Asia/Kolkata');
+
+        tomorrowflag = time.isBetween(beforeTime, afterTime);
+      }
+      if (!tomorrowflag && isTimeExtended) {
+        tomorrowflag = true;
+      }
+
+      if (OvermorrowopenTime && OvermorrowcloseTime) {
+        const time = moment().tz("Asia/Kolkata");
+        const beforeTime = moment.tz(OvermorrowopenTime, 'HH:mm:ss', 'Asia/Kolkata');
+        const afterTime = moment.tz(OvermorrowcloseTime, 'HH:mm:ss', 'Asia/Kolkata');
+
+        overmorrowflag = time.isBetween(beforeTime, afterTime);
+      }
+      if (!overmorrowflag && isTimeExtended) {
+        overmorrowflag = true;
+      }
+      time.todayisOutletOpen = todayflag
+      time.tomorrowisOutletOpen = tomorrowflag
+      time.overmorrowisOutletOpen = overmorrowflag
       return time
     })
 

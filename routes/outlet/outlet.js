@@ -366,11 +366,9 @@ router.post("/updateOutlet/:outletId", async (req, res) => {
   delete outletData?.isBothFood;
   delete outletData?.password;
 
-  console.log("outletData", outletData.convenienceFee)
-
   try {
     if (bankDetailsData) {
-      const bankDetails = await supabaseInstance.from("BankDetails").update({ ...bankDetailsData }).eq("bankDetailsId", bankDetailsData.bankDetailsId).select("*");
+      const bankDetails = await supabaseInstance.from("BankDetails").update({accountNumber: bankDetailsData?.accountNumber || null, BankName: bankDetailsData?.BankName, IFSCCode: bankDetailsData?.IFSCCode,bankId:bankDetailsData?.bankId || null }).eq("bankDetailsId", bankDetailsData.bankDetailsId).select("*");
     }
 
     if (categoryDetailsData?.length > 0) {

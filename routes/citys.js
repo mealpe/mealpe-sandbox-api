@@ -10,7 +10,7 @@ router.get("/", function (req, res, next) {
 
 router.get("/getCities", async (req, res) => {
   try {
-    const { data, error } = await supabaseInstance.from("City").select();
+    const { data, error } = await supabaseInstance.from("City").select('*, Campus!left(*)');
     if (data) {
       res.status(200).json({
         success: true,

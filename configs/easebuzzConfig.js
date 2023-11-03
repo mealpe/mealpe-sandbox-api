@@ -5,6 +5,4 @@ const config = {
     mealpe_bank_label :""
 };
 
-// MEALPE ONLINE FOOD ORDERING POS PRIVATE LIMITED
-
 exports.config = config;

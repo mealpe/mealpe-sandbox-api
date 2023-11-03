@@ -249,7 +249,18 @@ router.post("/userlogin", async (req, res) => {
 router.get("/cafeteriaDetails/:outletId/:customerAuthUID", async (req, res) => {
   const { outletId, customerAuthUID } = req.params;
   try {
-    const { data, error } = await supabaseInstance.from("Menu_Item").select("*, item_categoryid(*, parent_category_id(*)), FavoriteMenuItem!left(*)").eq("isDelete", false).eq("outletId", outletId).eq("FavoriteMenuItem.customerAuthUID", customerAuthUID);
+    let queryString = "*, item_categoryid(*, parent_category_id(*))"
+
+    if (customerAuthUID != 'null')
+      queryString += ', FavoriteMenuItem!left(*)'
+    let query = supabaseInstance.from("Menu_Item").select(queryString).eq("isDelete", false).eq("outletId", outletId)
+
+    if (customerAuthUID != 'null') {
+      query = query.eq("FavoriteMenuItem.customerAuthUID", customerAuthUID);
+    }
+
+    const { data, error } = await query;
+    
     if (data) {
       const outdetData = await supabaseInstance.from("Outlet").select("*,Menu_Categories(*),isTimeExtended,Timing!left(*, dayId(*))").eq("outletId", outletId).maybeSingle();
 
@@ -438,7 +449,7 @@ router.get("/homeData", async (req, res) => {
 
           flag = time.isBetween(beforeTime, afterTime);
         }
-        if (!flag && m.isTimeExtended) {
+        if (!flag && m.istimeextended) {
           flag = true;
         }
         return {
@@ -662,12 +673,17 @@ router.get("/realtimeCustomerOrders/:orderId", function (req, res) {
   res.setHeader("connection", "keep-alive");
   res.setHeader("Content-Type", "text/event-stream");
 
-  supabaseInstance.channel(`customer-insert-channel-${orderId}`)
+  const channelName = `customer-update-channel-${orderId}-${Date.now()}`;
+
+  supabaseInstance.channel(channelName)
     .on(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'Order', filter: `orderId=eq.${orderId}` },
-      (payload) => {
-        res.write(`data: ${JSON.stringify({ updateorder: payload?.new || null })}\n\n`);
+      async (payload) => {
+        const orderData = await supabaseInstance.from("Order").select("*,Order_Item(*,Menu_Item(minimumpreparationtime))").eq("orderId", payload.new.orderId).maybeSingle()
+        console.log("orderData==>", orderData);
+
+        res.write(`data: ${JSON.stringify({ updateorder: { ...orderData?.data, totalItems: orderData?.data?.Order_Item?.length || 0 } || null })}\n\n`);
       }
     ).subscribe((status) => {
       console.log("subscribe status for orderId => ", orderId);
@@ -675,13 +691,13 @@ router.get("/realtimeCustomerOrders/:orderId", function (req, res) {
 
   res.write("retry: 10000\n\n");
   req.on('close', () => {
-    supabaseInstance.channel(`customer-insert-channel-${orderId}`).unsubscribe()
+    supabaseInstance.channel(channelName).unsubscribe()
       .then(res => {
         console.log(".then => ", res);
       }).catch((err) => {
         console.log(".catch => ", err);
       }).finally(() => {
-        console.log(`${orderId} Connection closed`);
+        console.log(`${channelName} Connection closed`);
       });
   });
 });
@@ -749,13 +765,56 @@ router.post("/userGooglelogin", async (req, res) => {
   }
 });
 
+router.post("/iosUserGooglelogin", async (req, res) => {
+  const { email, name, photo } = req.body;
+  try {
+    if (!email) {
+      throw new Error("Email is missing in the request.");
+    }
+
+    const { data, error } = await supabaseInstance.auth.admin.createUser({
+      email: email,
+      email_confirm: true
+    })
+
+    if (data?.user?.id) {
+      const customerData = await supabaseInstance.from("Customer").select(customerSlectString).eq("isDelete", false).eq("customerAuthUID", data.user.id).maybeSingle();
+      console.log("customerData=>", customerData);
+      if (customerData.data) {
+        res.status(200).json({ success: true, data: customerData.data });
+      } else {
+        // mobile: data?.user?.phone ? +data.user.phone : null,
+        const customerResponse = await supabaseInstance.from("Customer").insert({ email: data.user.email, customerName: name || null, customerAuthUID: data.user.id }).select(customerSlectString).maybeSingle();
+        if (customerResponse.data) {
+          res.status(200).json({ success: true, data: customerResponse.data });
+        } else {
+          res.status(500).json({ success: false, error: customerResponse.error });
+        }
+      }
+    } else if (error?.message?.includes("email address has already been registered")) {
+      const customerData = await supabaseInstance.from("Customer").select(customerSlectString).eq("isDelete", false).eq("email", email).maybeSingle();
+      console.log("customerData=>", customerData)
+      if (customerData.data) {
+        res.status(200).json({ success: true, data: customerData.data });
+      } else {
+        res.status(500).json({ success: false, error: "Something went wrong." });
+      }
+    } else {
+      throw error;
+    }
+  } catch (error) {
+    console.error("Authentication error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.post("/updateMobile", async (req, res) => {
   const { mobile, customerAuthUID } = req.body;
   console.log({ mobile, customerAuthUID });
   try {
     supabaseInstance.auth.admin.updateUserById(customerAuthUID, { phone: mobile }).then(async (updateUserByIdResponse) => {
       if (updateUserByIdResponse?.data?.user) {
-        const customerResponse = await supabaseInstance.from("Customer").update({ mobile }).eq("customerAuthUID", customerAuthUID).select(customerSlectString).maybeSingle();
+        const customerResponse = await supabaseInstance.from("Customer").update({ mobile: mobile + "" }).eq("customerAuthUID", customerAuthUID).select(customerSlectString).maybeSingle();
         if (customerResponse.data) {
           res.status(200).json({
             success: true,
@@ -781,7 +840,7 @@ router.post("/updateMobile", async (req, res) => {
       }
     }).catch((updateUserByIdError) => {
       console.error("updateUserByIdError => ", updateUserByIdError);
-      
+
       res.status(500).json({
         success: false,
         message: "Something went wrong."
