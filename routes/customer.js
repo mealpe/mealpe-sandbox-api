@@ -94,7 +94,7 @@ router.post("/verifyMobileOTP", async (req, res) => {
   //* if email  => required[email, token];
   const { mobile, otp, email, token } = req.body;
   try {
-    if (mobile === 919999999999 || mobile === 9999999999) {
+    if (mobile === 919999999999 || mobile === 9999999999 || process.env?.IS_SANDBOX) {
       res.status(200).json({
         success: true,
         data: { message: "Bypass user" },
