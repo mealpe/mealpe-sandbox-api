@@ -38,7 +38,8 @@ router.post("/createOutlet", async (req, res) => {
     commissionFee,
     bankLabel,
     isVeg,
-    isNonVeg
+    isNonVeg,
+    deliveryCharge
   } = req.body;
   try {
     const { data, error } = await supabaseInstance.auth.signUp(
@@ -115,6 +116,10 @@ router.post("/createOutlet", async (req, res) => {
         postObject.bankLabel = bankLabel;
       }
 
+      if (deliveryCharge) {
+        postObject.deliveryCharge = deliveryCharge;
+      }
+
       if (!isPrimaryOutlet) {
         postObject.primaryOutletId = primaryOutletId;
       } else {
@@ -132,11 +137,13 @@ router.post("/createOutlet", async (req, res) => {
         .from("Outlet_Role")
         .insert({
           role: "Order Management", outletId: outletId, access: [
-            "Restaurants",
-            "Payments",
-            "Users",
             "Dashboard",
-            "Configuration"
+            "Orders",
+            "Menu",
+            "Customer",
+            "Outlets",
+            "KOT",
+            "Settings"
           ]
         })
         .select("*")
@@ -525,10 +532,10 @@ router.post("/updateTaxCharge", async (req, res) => {
 
 router.post("/updatePetPooja/:outletId", async (req, res) => {
   const { outletId } = req.params;
-  const { petPoojaAppKey, petPoojaAppSecret, petPoojaApAccessToken, petPoojaRestId, publishProcessingStep } = req.body;
+  const { petPoojaAppKey, petPoojaAppSecret, petPoojaApAccessToken, petPoojaRestId, publishProcessingStep, isOrderHandlingFromPetpooja, isOrderDropInPetpooja } = req.body;
 
   try {
-    const postbody = { petPoojaAppKey, petPoojaAppSecret, petPoojaApAccessToken, petPoojaRestId };
+    const postbody = { petPoojaAppKey, petPoojaAppSecret, petPoojaApAccessToken, petPoojaRestId, isOrderHandlingFromPetpooja, isOrderDropInPetpooja };
     if (publishProcessingStep) {
       postbody.publishProcessingStep = publishProcessingStep;
     }
@@ -729,6 +736,26 @@ router.post("/pushMenuData/:outletId", async (req, res) => {
   }
 
 })
+
+router.get("/getOutletList", async (req, res) => {
+
+  try {
+    const { data, error } = await supabaseInstance
+      .from("Outlet")
+      .select("outletId,outletName,campusId(campusId,campusName),cityId(cityId,city))");
+    if (data) {
+      res.status(200).json({
+        success: true,
+        data:data
+      });
+    } else {
+      throw error
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 
 
 // router.post("/resetOutletPassword/:outletId", async (req, res) => {

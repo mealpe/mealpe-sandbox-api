@@ -17,7 +17,7 @@ router.get('/', (req, res, next) => {
 router.post('/initiate-payment', async (req, res, next) => {
 
     const {
-        basePrice, //*base price
+        itemTotalPrice, //*base price
         productinfo,
         firstname,
         phone,
@@ -32,112 +32,119 @@ router.post('/initiate-payment', async (req, res, next) => {
     const surl = `${req.protocol}://${req.get('host')}/payment/customer/success-payment`;
     const furl = `${req.protocol}://${req.get('host')}/payment/customer/failure-payment`;
 
-    if (basePrice && productinfo && firstname && phone && email && customerAuthUID && outletId) {
+    if (itemTotalPrice && productinfo && firstname && phone && email && customerAuthUID && outletId) {
 
         try {
-            const getPriceBreakdownResponse = await getPriceBreakdown(outletId, basePrice, isDineIn, isPickUp, isDelivery);
-                if(getPriceBreakdownResponse && getPriceBreakdownResponse.outletBankLabel) {
-                    //* -> getPriceBreakdownResponse = is breakdown
-                    const transactionResponse = await supabaseInstance.from("Transaction")
-                    .insert({ 
+            const getPriceBreakdownResponse = await getPriceBreakdown(outletId, itemTotalPrice, isDineIn, isPickUp, isDelivery);
+            if (getPriceBreakdownResponse && getPriceBreakdownResponse.outletBankLabel) {
+                //* -> getPriceBreakdownResponse = is breakdown
+                console.log("getPriceBreakdownResponse==>", getPriceBreakdownResponse)
+
+                const transactionResponse = await supabaseInstance.from("Transaction")
+                    .insert({
                         firstname,
-                        phone, 
-                        email, 
-                        customerAuthUID, 
+                        phone,
+                        email,
+                        customerAuthUID,
                         outletId,
                         amount: getPriceBreakdownResponse?.totalPriceForCustomer,
-                        basePrice,
-                        mealpeVendorAmount:getPriceBreakdownResponse?.mealpeVendorAmount,
+                        itemTotalPrice,
+                        mealpeVendorAmount: getPriceBreakdownResponse?.mealpeVendorAmount,
                         outletVendorAmount: getPriceBreakdownResponse?.outletVendorAmount,
-                        foodGST:getPriceBreakdownResponse?.foodGST,
+                        foodGST: getPriceBreakdownResponse?.foodGST,
                         convenienceAmount: getPriceBreakdownResponse?.convenienceAmount,
-                        convenienceGSTAmount:getPriceBreakdownResponse?.convenienceGSTAmount,
-                        convenienceTotalAmount:getPriceBreakdownResponse?.convenienceTotalAmount,
-                        commissionAmount:getPriceBreakdownResponse?.commissionAmount,
-                        commissionGSTAmount:getPriceBreakdownResponse?.commissionGSTAmount,
-                        commissionTotalAmount:getPriceBreakdownResponse?.commissionTotalAmount,
-                        packagingCharge:getPriceBreakdownResponse?.packagingCharge
+                        convenienceGSTAmount: getPriceBreakdownResponse?.convenienceGSTAmount,
+                        convenienceTotalAmount: getPriceBreakdownResponse?.convenienceTotalAmount,
+                        commissionAmount: getPriceBreakdownResponse?.commissionAmount,
+                        commissionGSTAmount: getPriceBreakdownResponse?.commissionGSTAmount,
+                        commissionTotalAmount: getPriceBreakdownResponse?.commissionTotalAmount,
+                        packagingCharge: getPriceBreakdownResponse?.packagingCharge,
+                        deliveryCharge: getPriceBreakdownResponse?.deliveryCharge,
+                        tdsAmount: getPriceBreakdownResponse?.TDS,
+                        tcsAmount: getPriceBreakdownResponse?.TCS,
+                        isGSTApplied: getPriceBreakdownResponse?.isGstApplied,
+                        foodBasePrice: getPriceBreakdownResponse?.FoodBasePrice
                     }).select("*").maybeSingle();
-                    if (transactionResponse?.data) {
-                        console.log("transactionResponse=>", transactionResponse);
+                if (transactionResponse?.data) {
+                    console.log("transactionResponse=>", transactionResponse);
 
-                        var hashstring = easebuzzConfig.key + "|" + transactionResponse?.data?.txnid + "|" + getPriceBreakdownResponse?.totalPriceForCustomer + "|" + productinfo + "|" + firstname + "|" + email + "|||||||||||" + easebuzzConfig.salt
-        
-                        const _generateHash = generateHash(hashstring);
-                        let postBody ={
-                            'key': easebuzzConfig.key,
-                            'txnid': transactionResponse?.data?.txnid,
-                            'amount': getPriceBreakdownResponse?.totalPriceForCustomer,
-                            'productinfo': productinfo,
-                            'firstname': firstname,
-                            'phone': phone,
-                            'email': email,
-                            'surl': surl,
-                            'furl': furl,
-                            'hash': _generateHash,
-                            'udf1': '',
-                            'udf2': '',
-                            'udf3': '',
-                            'udf4': '',
-                            'udf5': '',
-                            'udf6': '',
-                            'udf7': '',
-                            'address1': '',
-                            'address2': '',
-                            'city': '',
-                            'state': '',
-                            'country': '',
-                            'zipcode': '',
-                            // 'show_payment_mode': '',
-                            // 'request_flow': '',
-                            // 'sub_merchant_id': '',
-                            // 'payment :ategory', '',
-                            // 'account_no': '',
-                        }
-                        if (getPriceBreakdownResponse?.outletBankLabel && easebuzzConfig.mealpe_bank_label && (getPriceBreakdownResponse?.mealpeVendorAmount > 0) && (getPriceBreakdownResponse?.outletVendorAmount > 0)) {
-                            postBody.split_payments = {
-                                [easebuzzConfig.mealpe_bank_label] : getPriceBreakdownResponse?.mealpeVendorAmount,
-                                [getPriceBreakdownResponse.outletBankLabel]: getPriceBreakdownResponse?.outletVendorAmount
-                            }
-                            postBody.split_payments = JSON.stringify(postBody.split_payments);
-                        }
-        
-                        // console.log(encodedParams);
-        
-                        const options = {
-                            method: 'POST',
-                            url: `${easebuzzConfig.easebuzzBaseUrl}/payment/initiateLink`,
-                            headers: {
-                                'Content-Type': 'application/x-www-form-urlencoded',
-                                Accept: 'application/json'
-                            },
-                            data: postBody,
-                        };
-                                                
-                        // const encodedParamsbj = encodedParams?.toString()?.split("&")?.map(m => m?.split("="))?.reduce((a, v) => ({ ...a, [v[0]]: decodeURIComponent(v[1])}), {}) ;
-                        await axios.request(options).then(async (initiateLinkResponse) => {
-                            const transactionUpdateResponse = await supabaseInstance.from("Transaction").update({ initiateLink_post_body: postBody, initiateLink_response: initiateLinkResponse.data }).eq("txnid", transactionResponse?.data?.txnid).select('*').maybeSingle();
-                            console.log("transactionUpdateResponse in then =>", transactionUpdateResponse);
-        
-                            if (transactionUpdateResponse?.data) {
-                                res.status(200).json({ success: true, response: initiateLinkResponse?.data });
-                            } else {
-                                res.status(500).json({ success: false, response: transactionUpdateResponse.error.message });
-                            }
-                        }).catch(async (error) => {
-                            console.error(error);
-                            const transactionUpdateResponse = await supabaseInstance.from("Transaction").update({ initiateLink_post_body:postBody, initiateLink_error: error }).eq("txnid", transactionResponse?.data?.txnid).select('*').maybeSingle();
-                            console.log("transactionUpdateResponse in error=>", transactionUpdateResponse)
-                            res.status(500).json({ success: false, response: error });
-                        })
-                    } else {
-                        throw transactionResponse.error
+                    var hashstring = easebuzzConfig.key + "|" + transactionResponse?.data?.txnid + "|" + getPriceBreakdownResponse?.totalPriceForCustomer + "|" + productinfo + "|" + firstname + "|" + email + "|||||||||||" + easebuzzConfig.salt
+
+                    const _generateHash = generateHash(hashstring);
+                    let postBody = {
+                        'key': easebuzzConfig.key,
+                        'txnid': transactionResponse?.data?.txnid,
+                        'amount': getPriceBreakdownResponse?.totalPriceForCustomer,
+                        'productinfo': productinfo,
+                        'firstname': firstname,
+                        'phone': phone,
+                        'email': email,
+                        'surl': surl,
+                        'furl': furl,
+                        'hash': _generateHash,
+                        'udf1': '',
+                        'udf2': '',
+                        'udf3': '',
+                        'udf4': '',
+                        'udf5': '',
+                        'udf6': '',
+                        'udf7': '',
+                        'address1': '',
+                        'address2': '',
+                        'city': '',
+                        'state': '',
+                        'country': '',
+                        'zipcode': '',
+                        // 'show_payment_mode': '',
+                        // 'request_flow': '',
+                        // 'sub_merchant_id': '',
+                        // 'payment :ategory', '',
+                        // 'account_no': '',
                     }
-                } else if(!getPriceBreakdownResponse.outletBankLabel) {
-                    res.status(500).json({ success: false, error: "Bank field not found." });
+                    if (getPriceBreakdownResponse?.outletBankLabel && easebuzzConfig.mealpe_bank_label && (getPriceBreakdownResponse?.mealpeVendorAmount > 0) && (getPriceBreakdownResponse?.outletVendorAmount > 0)) {
+                        postBody.split_payments = {
+                            [easebuzzConfig.mealpe_bank_label]: getPriceBreakdownResponse?.mealpeVendorAmount,
+                            [getPriceBreakdownResponse.outletBankLabel]: getPriceBreakdownResponse?.outletVendorAmount
+                        }
+                        postBody.split_payments = JSON.stringify(postBody.split_payments);
+                    }
+
+                    // console.log(encodedParams);
+
+                    const options = {
+                        method: 'POST',
+                        url: `${easebuzzConfig.easebuzzBaseUrl}/payment/initiateLink`,
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            Accept: 'application/json'
+                        },
+                        data: postBody,
+                    };
+
+                    // const encodedParamsbj = encodedParams?.toString()?.split("&")?.map(m => m?.split("="))?.reduce((a, v) => ({ ...a, [v[0]]: decodeURIComponent(v[1])}), {}) ;
+                    await axios.request(options).then(async (initiateLinkResponse) => {
+                        const transactionUpdateResponse = await supabaseInstance.from("Transaction").update({ initiateLink_post_body: postBody, initiateLink_response: initiateLinkResponse.data }).eq("txnid", transactionResponse?.data?.txnid).select('*').maybeSingle();
+                        console.log("transactionUpdateResponse in then =>", transactionUpdateResponse);
+
+                        if (transactionUpdateResponse?.data) {
+                            res.status(200).json({ success: true, response: initiateLinkResponse?.data });
+                        } else {
+                            res.status(500).json({ success: false, response: transactionUpdateResponse.error.message });
+                        }
+                    }).catch(async (error) => {
+                        console.error(error);
+                        const transactionUpdateResponse = await supabaseInstance.from("Transaction").update({ initiateLink_post_body: postBody, initiateLink_error: error }).eq("txnid", transactionResponse?.data?.txnid).select('*').maybeSingle();
+                        console.log("transactionUpdateResponse in error=>", transactionUpdateResponse)
+                        res.status(500).json({ success: false, response: error });
+                    })
                 } else {
-                    throw getPriceBreakdownResponse?.error || getPriceBreakdownResponse;
+                    throw transactionResponse.error
                 }
+            } else if (!getPriceBreakdownResponse.outletBankLabel) {
+                res.status(500).json({ success: false, error: "Bank field not found." });
+            } else {
+                throw getPriceBreakdownResponse?.error || getPriceBreakdownResponse;
+            }
         } catch (error) {
             console.error("error => ", error);
             res.status(500).json({ success: false, error: error });
@@ -205,7 +212,7 @@ router.get('/failure-payment', (req, res, next) => {
 
 //         try {
 //             const orderResponse = await supabaseInstance.from("Order").select("*,customerAuthUID(*),outletId(*)").eq("orderId", orderId).maybeSingle();
-    
+
 //             if (orderResponse?.data) {
 //                 console.log("orderResponse=>", orderResponse);
 
@@ -260,13 +267,13 @@ router.post('/request-refund', async (req, res, next) => {
 })
 
 router.post('/get-price-breakdown', async (req, res, next) => {
-    const {outletId, basePrice, isDineIn, isPickUp, isDelivery} = req.body;
-    
+    const { outletId, itemTotalPrice, isDineIn, isPickUp, isDelivery } = req.body;
+
     try {
-        const getPriceBreakdownResponse = await getPriceBreakdown(outletId, basePrice, isDineIn, isPickUp, isDelivery);
+        const getPriceBreakdownResponse = await getPriceBreakdown(outletId, itemTotalPrice, isDineIn, isPickUp, isDelivery);
         console.log("getPriceBreakdownResponse => ", getPriceBreakdownResponse);
 
-        res.status(200).json({ success: true,  ...getPriceBreakdownResponse});
+        res.status(200).json({ success: true, ...getPriceBreakdownResponse });
     } catch (error) {
         res.status(500).json({ success: false, error: error });
     }
@@ -275,7 +282,7 @@ router.post('/get-price-breakdown', async (req, res, next) => {
 router.post('/initiate-payment-with-order', async (req, res, next) => {
 
     const {
-        basePrice, //*base price
+        itemTotalPrice, //*base price
         productinfo,
         firstname,
         phone,
@@ -288,14 +295,15 @@ router.post('/initiate-payment-with-order', async (req, res, next) => {
     const surl = `${req.protocol}://${req.get('host')}/payment/customer/success-payment`;
     const furl = `${req.protocol}://${req.get('host')}/payment/customer/failure-payment`;
 
-    if (basePrice && productinfo && firstname && phone && email && customerAuthUID && outletId && orderObject) {
+    if (itemTotalPrice && productinfo && firstname && phone && email && customerAuthUID && outletId && orderObject) {
 
         try {
             let encodedParams = new URLSearchParams();
 
-            const getPriceBreakdownResponse = await getPriceBreakdown(outletId, basePrice);
+            const getPriceBreakdownResponse = await getPriceBreakdown(outletId, itemTotalPrice);
             if (getPriceBreakdownResponse && getPriceBreakdownResponse.outletBankLabel) {
                 //* -> getPriceBreakdownResponse = is breakdown
+                console.log("getPriceBreakdownResponse==>", getPriceBreakdownResponse)
                 const transactionResponse = await supabaseInstance.from("Transaction")
                     .insert({
                         firstname,
@@ -304,7 +312,7 @@ router.post('/initiate-payment-with-order', async (req, res, next) => {
                         customerAuthUID,
                         outletId,
                         amount: getPriceBreakdownResponse?.totalPriceForCustomer,
-                        basePrice,
+                        itemTotalPrice,
                         mealpeVendorAmount: getPriceBreakdownResponse?.mealpeVendorAmount,
                         outletVendorAmount: getPriceBreakdownResponse?.outletVendorAmount,
                         foodGST: getPriceBreakdownResponse?.foodGST,
@@ -315,6 +323,11 @@ router.post('/initiate-payment-with-order', async (req, res, next) => {
                         commissionGSTAmount: getPriceBreakdownResponse?.commissionGSTAmount,
                         commissionTotalAmount: getPriceBreakdownResponse?.commissionTotalAmount,
                         packagingCharge: getPriceBreakdownResponse?.packagingCharge,
+                        deliveryCharge: getPriceBreakdownResponse?.deliveryCharge,
+                        tdsAmount: getPriceBreakdownResponse?.TDS,
+                        tcsAmount: getPriceBreakdownResponse?.TCS,
+                        isGSTApplied: getPriceBreakdownResponse?.isGstApplied,
+                        foodBasePrice: getPriceBreakdownResponse?.FoodBasePrice,
                         orderPostBody: orderObject || null
                     }).select("*").maybeSingle();
                 if (transactionResponse?.data) {
@@ -457,78 +470,78 @@ function encodedParamsToObject(encodedParams) {
     return { ...obj };
 }
 
-function getPriceBreakdown(outletId, basePrice, isDineIn=false, isPickUp=false, isDelivery=false) {
-    basePrice = +basePrice;
-    return new Promise(async (resolve, reject) => {
-        if (outletId && basePrice) {
-            try {
-                const outletResponse = await supabaseInstance.from("Outlet").select('*').eq("outletId", outletId).maybeSingle();
-                if (outletResponse?.data) {
-                    const outletData = outletResponse?.data;
+// function getPriceBreakdown(outletId, basePrice, isDineIn=false, isPickUp=false, isDelivery=false) {
+//     basePrice = +basePrice;
+//     return new Promise(async (resolve, reject) => {
+//         if (outletId && basePrice) {
+//             try {
+//                 const outletResponse = await supabaseInstance.from("Outlet").select('*').eq("outletId", outletId).maybeSingle();
+//                 if (outletResponse?.data) {
+//                     const outletData = outletResponse?.data;
 
-                    let packagingCharge = 0;
-                    if (isPickUp === true || isDelivery === true) {
-                        packagingCharge = outletData.packaging_charge;
-                        basePrice = basePrice + packagingCharge;
-                    }
+//                     let packagingCharge = 0;
+//                     if (isPickUp === true || isDelivery === true) {
+//                         packagingCharge = outletData.packaging_charge;
+//                         basePrice = basePrice + packagingCharge;
+//                     }
 
-                    let foodGST = 0;
-                    if (outletResponse?.data?.isGSTShow) {
-                        foodGST = (5 * basePrice) / 100;
-                    } else {
-                        //todo calculate basePrice and foodGST
-                        foodGST = (5 * basePrice) / 100;
-                        basePrice = basePrice - foodGST;
-                    }
+//                     let foodGST = 0;
+//                     if (outletResponse?.data?.isGSTShow) {
+//                         foodGST = (5 * basePrice) / 100;
+//                     } else {
+//                         //todo calculate basePrice and foodGST
+//                         foodGST = (5 * basePrice) / 100;
+//                         basePrice = basePrice - foodGST;
+//                     }
 
-                    const convenienceAmount = (outletData?.convenienceFee * basePrice) / 100;
-                    const convenienceGSTAmount = (18 * convenienceAmount) / 100;
-                    const convenienceTotalAmount = convenienceAmount + convenienceGSTAmount;
+//                     const convenienceAmount = (outletData?.convenienceFee * basePrice) / 100;
+//                     const convenienceGSTAmount = (18 * convenienceAmount) / 100;
+//                     const convenienceTotalAmount = convenienceAmount + convenienceGSTAmount;
 
-                    //* total amount customer pay to mealpe
-                    const totalPriceForCustomer = Number(Number(Math.round(basePrice + foodGST + convenienceTotalAmount))?.toFixed(2));
+//                     //* total amount customer pay to mealpe
+//                     const totalPriceForCustomer = Number(Number(Math.round(basePrice + foodGST + convenienceTotalAmount))?.toFixed(2));
 
-                    const commissionAmount = (outletData?.commissionFee * basePrice) / 100;
-                    const commissionGSTAmount =  (18 * commissionAmount) / 100;
-                    const commissionTotalAmount =  commissionAmount + commissionGSTAmount;
+//                     const commissionAmount = (outletData?.commissionFee * basePrice) / 100;
+//                     const commissionGSTAmount =  (18 * commissionAmount) / 100;
+//                     const commissionTotalAmount =  commissionAmount + commissionGSTAmount;
 
-                    // const outletVendorAmount = Number((totalPriceForCustomer - commissionTotalAmount)?.toFixed(2));
-                    const outletVendorAmount = Number((basePrice - commissionTotalAmount)?.toFixed(2));
-                    
-                    const mealpeVendorAmount = Number((totalPriceForCustomer - outletVendorAmount)?.toFixed(2));
-                    const outletBankLabel = outletData?.bankLabel || null;
+//                     // const outletVendorAmount = Number((totalPriceForCustomer - commissionTotalAmount)?.toFixed(2));
+//                     const outletVendorAmount = Number((basePrice - commissionTotalAmount)?.toFixed(2));
 
-                    resolve({
-                        success: true,
+//                     const mealpeVendorAmount = Number((totalPriceForCustomer - outletVendorAmount)?.toFixed(2));
+//                     const outletBankLabel = outletData?.bankLabel || null;
 
-                        basePrice,
-                        foodGST,    
-                        convenienceAmount,
-                        convenienceGSTAmount,
-                        convenienceTotalAmount,
-                        totalPriceForCustomer,
-                        commissionAmount,
-                        commissionGSTAmount,
-                        commissionTotalAmount,
-                        mealpeVendorAmount,
-                        outletVendorAmount,
-                        packagingCharge,
+//                     resolve({
+//                         success: true,
 
-                        outletBankLabel
-                    })
+//                         basePrice,
+//                         foodGST,    
+//                         convenienceAmount,
+//                         convenienceGSTAmount,
+//                         convenienceTotalAmount,
+//                         totalPriceForCustomer,
+//                         commissionAmount,
+//                         commissionGSTAmount,
+//                         commissionTotalAmount,
+//                         mealpeVendorAmount,
+//                         outletVendorAmount,
+//                         packagingCharge,
 
-                } else {
-                    reject({success: false, message: "Outlet id is wrong."});
-                }
-            } catch (error) {
-                console.log(error);
-                reject({success: false, error: error});
-            }
-        } else {
-            reject({success: false, message: "Please provide valid values."});
-        }
-    })
-}
+//                         outletBankLabel
+//                     })
+
+//                 } else {
+//                     reject({success: false, message: "Outlet id is wrong."});
+//                 }
+//             } catch (error) {
+//                 console.log(error);
+//                 reject({success: false, error: error});
+//             }
+//         } else {
+//             reject({success: false, message: "Please provide valid values."});
+//         }
+//     })
+// }
 
 function requestRefund(orderId) {
     return new Promise(async (resolve, reject) => {
@@ -579,3 +592,101 @@ function requestRefund(orderId) {
         }
     })
 };
+
+function getPriceBreakdown(outletId, itemTotalPrice, isDineIn = false, isPickUp = false, isDelivery = false) {
+    itemTotalPrice = +itemTotalPrice;
+    return new Promise(async (resolve, reject) => {
+        if (outletId && itemTotalPrice) {
+            try {
+                const outletResponse = await supabaseInstance.from("Outlet").select('*').eq("outletId", outletId).maybeSingle();
+                if (outletResponse?.data) {
+                    const outletData = outletResponse?.data;
+                    let isGstApplied = false;
+                    let foodGST = 0;
+                    let commissionAmount;
+                    let FoodBasePrice;
+                    let convenienceAmount;
+                    let commissionTotalAmount;
+                    let TDS;
+                    let TCS;
+                    let convenienceGSTAmount;
+                    let totalPriceForCustomer;
+                    let mealpeVendorAmount;
+                    let outletVendorAmount;
+                    let convenienceTotalAmount;
+                    let commissionGSTAmount;
+                    let deliveryCharge = 0;
+                    let packagingCharge = 0;
+
+                    if (isPickUp === true) {
+                        packagingCharge = outletData.packaging_charge;
+                    }
+
+                    if (isDelivery === true) {
+                        packagingCharge = outletData.packaging_charge;
+                        deliveryCharge = outletData.deliveryCharge;
+                    }
+
+                    if (outletData?.isGSTShow === true) {
+                        isGstApplied = true;
+                        foodGST = Number(((5 * itemTotalPrice) / 100).toFixed(2));
+                        FoodBasePrice = itemTotalPrice;
+                    } else {
+                        isGstApplied = false;
+                        FoodBasePrice = Number(((itemTotalPrice * 100) / 105).toFixed(2));
+                        foodGST = Number((itemTotalPrice - FoodBasePrice).toFixed(2));
+                    }
+                    
+                    convenienceAmount = (outletData.convenienceFee * FoodBasePrice) / 100;
+                    convenienceGSTAmount = (18 * convenienceAmount) / 100;
+                    convenienceTotalAmount = Number((convenienceAmount + convenienceGSTAmount)?.toFixed(2));
+                    
+                    commissionAmount = (outletData.commissionFee * (deliveryCharge + packagingCharge + FoodBasePrice)) / 100;
+                    commissionGSTAmount = (18 *  commissionAmount) / 100;
+                    commissionTotalAmount = Number((commissionAmount + commissionGSTAmount)?.toFixed(2));
+
+                    TDS = (1 * FoodBasePrice) / 100;
+                    TCS = (packagingCharge + deliveryCharge) / 101;
+
+                    totalPriceForCustomer = Number((FoodBasePrice + packagingCharge + foodGST + deliveryCharge + convenienceTotalAmount)?.toFixed(2));
+                    mealpeVendorAmount = Number((foodGST + convenienceTotalAmount + commissionTotalAmount + TDS + TCS)?.toFixed(2));
+                    outletVendorAmount = Number((totalPriceForCustomer - mealpeVendorAmount)?.toFixed(2));
+
+                    const outletBankLabel = outletData?.bankLabel || null;
+
+                    resolve({
+                        success: true,
+
+                        itemTotalPrice,
+                        foodGST,
+                        commissionAmount,
+                        FoodBasePrice,
+                        convenienceAmount,
+                        commissionTotalAmount,
+                        TDS,
+                        TCS,
+                        convenienceGSTAmount,
+                        totalPriceForCustomer,
+                        mealpeVendorAmount,
+                        outletVendorAmount,
+                        packagingCharge,
+                        deliveryCharge,
+                        isGstApplied,
+                        convenienceTotalAmount,
+                        commissionGSTAmount,
+
+                        outletBankLabel
+                    })
+
+                } else {
+                    reject({ success: false, message: "Outlet id is wrong." });
+                }
+            } catch (error) {
+                console.log(error);
+                reject({ success: false, error: error });
+            }
+        } else {
+            reject({ success: false, message: "Please provide valid values." });
+        }
+    })
+}

@@ -41,7 +41,7 @@ router.post("/createOrder", async (req, res) => {
         }
 
 
-      saveOrderToPetpooja(restaurantId, customerAuthUID, orderId, outletId).then(async (saveOrderToPetpoojaResponse) => {
+      saveOrderToPetpooja(req, orderId).then(async (saveOrderToPetpoojaResponse) => {
         console.log('.then block ran: ', saveOrderToPetpoojaResponse.data);
         // const getOrderDetailsAfterTrigger = await supabaseInstance.from("Order").select("*").eq("orderId", data.orderId).maybeSingle();
         console.log({customerauthuid:customerAuthUID,targate_date: pickupTime.orderDate});
@@ -145,7 +145,7 @@ router.get("/getOrder/:orderId", async (req, res) => {
   try {
     const {data,error} = await supabaseInstance
     .from("Order")
-    .select("*,customerAuthUID(*),outletId(outletId,outletName,logo,address),DeliveryAddress(address),Order_Item(*,Menu_Item(itemname,item_image_url)),Order_Schedule(*),orderStatusId(*),Transaction(txnid,convenienceTotalAmount,foodGST,basePrice,packagingCharge)")
+    .select("*,customerAuthUID(*),outletId(outletId,outletName,logo,address),DeliveryAddress(address),Order_Item(*,Menu_Item(itemname,item_image_url)),Order_Schedule(*),orderStatusId(*),Transaction(txnid,convenienceTotalAmount,foodGST,itemTotalPrice,packagingCharge,deliveryCharge,isGSTApplied)")
     .eq("orderId", orderId)
     .maybeSingle();
     if (data) {
@@ -580,7 +580,7 @@ router.get("/getHistoryOrders/:outletId", async (req, res) => {
   const itemsPerPage = parseInt(perPage) || 10;
 
   try {
-    let query = supabaseInstance.rpc("get_orders_for_outlet", {outlet_uuid: outletId},{count:"exact"})
+    let query = supabaseInstance.rpc("get_orders_for_outlet", {outlet_uuid: outletId}, {count:"exact"})
     .eq("order_status_id",10)
     // .order("order_schedule_date",{ascending:false})
     // .order("order_schedule_time",{ascending:false})
@@ -632,6 +632,72 @@ router.get("/getHistoryOrders/:outletId", async (req, res) => {
   }
 });
 
+router.post("/getHistoryPetPoojaOrders/:outletId", async (req, res) => {
+  const { outletId } = req.params;
+  const {orderStatusId} = req.body;
+  const { orderSequenceId, startDate, endDate,page, perPage,orderType,sortType  } = req.query;
+  const pageNumber = parseInt(page) || 1;
+  const itemsPerPage = parseInt(perPage) || 10;
+
+  try {
+    let query = supabaseInstance.rpc("get_orders_for_outlet", {outlet_uuid: outletId},{count:"exact"})
+    .not("ordersavepetpoojaid", "is", null)
+    // .order("order_schedule_date",{ascending:false})
+    // .order("order_schedule_time",{ascending:false})
+    .range((pageNumber - 1) * itemsPerPage, pageNumber * itemsPerPage - 1)
+
+    
+    if (orderType === "dinein") {
+      query = query.eq("is_dine_in", true)
+    } else if (orderType === "pickup") {
+        query = query.eq("is_pick_up", true)
+    } else if (orderType === "delivery") {
+      query = query.eq("is_delivery", true)
+    }
+
+    if (sortType === "ascending") {
+      query = query.order("order_schedule_date",{ascending:true}).order("order_schedule_time",{ascending:true})
+    } else if(sortType === "descending") {
+        query = query.order("order_schedule_date",{ascending:false}).order("order_schedule_time",{ascending:false})
+    }else{
+      query = query.order("order_schedule_date",{ascending:false}).order("order_schedule_time",{ascending:false})
+    }
+
+    if (orderSequenceId) {
+      query = query.ilike("order_sequence_id", `%${orderSequenceId}%`);
+    }
+
+    if (startDate && endDate ) {
+      query = query.gte("order_schedule_date",startDate).lte("order_schedule_date",endDate);
+    }
+
+    if (orderStatusId.length > 0) {
+      query = query.in('order_status_id', orderStatusId)
+    }else{
+      query = query;
+    }
+
+    const { data, error,count } = await query;
+    if (data) {
+      const totalPages = Math.ceil(count / itemsPerPage);
+      res.status(200).json({
+        success: true,
+        data: data, 
+        meta: {
+          page: pageNumber,
+          perPage: itemsPerPage,
+          totalPages,
+          totalCount: count,
+        },
+      });
+    } else {
+      throw error
+    }
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({ success: false, error: error });
+  }
+});
 // router.get("/getCancelledOrders/:outletId", async (req, res) => {
 //   const { outletId } = req.params;
 //   const { page, perPage,orderType } = req.query; // Extract query parameters
@@ -749,7 +815,7 @@ router.post("/acceptOrder/:orderId", async (req, res) => {
     if (data) {
 
       updateOrderStatus(orderId,"1").then((updateOrderStatusToPetpoojaResponse) => {
-        console.log('.then block ran: ', updateOrderStatusToPetpoojaResponse);
+        console.log('updateOrderStatus : ', updateOrderStatusToPetpoojaResponse);
         res.status(200).json({
           success: true,
           data: {
@@ -779,7 +845,7 @@ router.post("/rejectOrder/:orderId", async (req, res) => {
       console.log("sendMobileSMSResponse => ", sendMobileSMSResponse);
 
       updateOrderStatus(orderId,"-2").then((updateOrderStatusToPetpoojaResponse) => {
-        console.log('.then block ran: ', updateOrderStatusToPetpoojaResponse);
+        console.log('updateOrderStatus ran: ', updateOrderStatusToPetpoojaResponse);
         res.status(200).json({
           success: true,
           data: {
@@ -806,7 +872,7 @@ router.post("/dispatchOrder/:orderId", async (req, res) => {
     const { data, error } = await supabaseInstance.from("Order").update({ orderStatusId: 4 }).select("*").eq("orderId", orderId).maybeSingle();
     if (data) {
       updateOrderStatus(orderId,"4").then((updateOrderStatusToPetpoojaResponse) => {
-        console.log('.then block ran: ', updateOrderStatusToPetpoojaResponse);
+        console.log('updateOrderStatus ran: ', updateOrderStatusToPetpoojaResponse);
         res.status(200).json({
           success: true,
           data: {
@@ -833,7 +899,7 @@ router.post("/foodReadyOrder/:orderId", async (req, res) => {
     const { data, error } = await supabaseInstance.from("Order").update({ orderStatusId: 5 }).select("*").eq("orderId", orderId).maybeSingle();
     if (data) {
       updateOrderStatus(orderId,"5").then((updateOrderStatusToPetpoojaResponse) => {
-        console.log('.then block ran: ', updateOrderStatusToPetpoojaResponse);
+        console.log('updateOrderStatus ran: ', updateOrderStatusToPetpoojaResponse);
         res.status(200).json({
           success: true,
           data: {
@@ -863,7 +929,7 @@ router.post("/deliveredOrder/:orderId", async (req, res) => {
       console.log("sendMobileSMSResponse => ", sendMobileSMSResponse);
     
       updateOrderStatus(orderId,"10").then((updateOrderStatusToPetpoojaResponse) => {
-        console.log('.then block ran: ', updateOrderStatusToPetpoojaResponse);
+        console.log('updateOrderStatus ran: ', updateOrderStatusToPetpoojaResponse);
         res.status(200).json({
           success: true,
           data: {

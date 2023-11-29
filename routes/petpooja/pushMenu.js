@@ -1,21 +1,21 @@
 const axios = require("axios").default;
 var express = require("express");
+const moment = require("moment-timezone");
 var router = express.Router();
 var supabaseInstance = require("../../services/supabaseClient").supabase;
 var petpoojaconfig = require("../../configs/petpoojaConfig");
-
 
 router.post("/pushData", async (req, res) => {
   const { outletId } = req.body;
   try {
 
-    let restaurentDataQuery= await supabaseInstance.from("Outlet").select("*").eq("outletId", outletId);
+    let restaurentDataQuery = await supabaseInstance.from("Outlet").select("*").eq("outletId", outletId);
     // if (restaurantId) {
     //   restaurentDataQuery = supabaseInstance.from("Restaurant").select("*").eq("restaurantId", restaurantId);
     // } else if (restaurantId && outletId) {
     //   restaurentDataQuery = supabaseInstance.from("Outlet").select("*").eq("restaurantId", restaurantId).eq("outletId", outletId);
     // }
-   
+
     const restaurentData = await restaurentDataQuery;
 
     let payload = {
@@ -89,7 +89,7 @@ router.post("/pushData", async (req, res) => {
       http_code: 200
     }
 
-    let parentCategoryQuery= await supabaseInstance.from("Menu_Parent_Categories").select("*").eq("outletId", outletId);
+    let parentCategoryQuery = await supabaseInstance.from("Menu_Parent_Categories").select("*").eq("outletId", outletId);
     // if (restaurantId && outletId) {
     //   parentCategoryQuery = await supabaseInstance.from("Menu_Parent_Categories").select("*").eq("restaurantId", restaurantId).eq("outletId", outletId);
     // } else if (restaurantId) {
@@ -210,18 +210,18 @@ router.post("/orderStatus", async (req, res) => {
   const { restaurantId, orderId } = req.body;
   try {
 
-    const { data, error } = await supabaseInstance.from("Order").select("*").eq("restaurantId",restaurantId).eq("orderId", orderId).maybeSingle()
-      let payload = {
-        restID:restaurantId,
-        orderID:orderId,
-        status:data.orderStatusId,
-        cancel_reason:"",
-        minimum_prep_time:20,
-        minimum_delivery_time:"",
-        rider_name:"",
-        rider_phone_number:"",
-        is_modified:"No"
-      }
+    const { data, error } = await supabaseInstance.from("Order").select("*").eq("restaurantId", restaurantId).eq("orderId", orderId).maybeSingle()
+    let payload = {
+      restID: restaurantId,
+      orderID: orderId,
+      status: data.orderStatusId,
+      cancel_reason: "",
+      minimum_prep_time: 20,
+      minimum_delivery_time: "",
+      rider_name: "",
+      rider_phone_number: "",
+      is_modified: "No"
+    }
 
     //  const payloadData = await axios.post(petpoojaconfig.config.order_status_api, payload);
 
@@ -350,7 +350,7 @@ router.post("/fetchMenuCard", async (req, res) => {
   const { outletId } = req.body;
   try {
 
-    const petPoojaQuery =await supabaseInstance.from("Outlet").select("*").eq("outletId",outletId).maybeSingle();
+    const petPoojaQuery = await supabaseInstance.from("Outlet").select("*").eq("outletId", outletId).maybeSingle();
 
     if (petPoojaQuery?.data) {
       const options = {
@@ -361,22 +361,22 @@ router.post("/fetchMenuCard", async (req, res) => {
           'access-token': petPoojaQuery.data?.petPoojaApAccessToken
         },
       };
-  
+
       const data = {
         "restID": petPoojaQuery.data?.petPoojaRestId
       };
       const payloadData = await axios.post(petpoojaconfig.config.fetch_menu_api, data, options);
-  
+
       if (payloadData?.data) {
 
         if (!petPoojaQuery?.data?.petpoojaMenuBackup && payloadData?.data?.success === '1') {
-          const petpoojaMenuBackup = await supabaseInstance.from("Outlet").update({petpoojaMenuBackup: payloadData?.data}).select("*").eq("outletId",outletId).maybeSingle();
+          const petpoojaMenuBackup = await supabaseInstance.from("Outlet").update({ petpoojaMenuBackup: payloadData?.data }).select("*").eq("outletId", outletId).maybeSingle();
         }
 
         res.status(200).json({
           success: true,
           data: payloadData.data,
-          op: {fetch_menu_api: petpoojaconfig.config.fetch_menu_api, data, options}
+          op: { fetch_menu_api: petpoojaconfig.config.fetch_menu_api, data, options }
         });
       } else {
         throw error;
@@ -391,109 +391,91 @@ router.post("/fetchMenuCard", async (req, res) => {
   }
 })
 
-function saveOrderToPetpooja(restaurantId, customerAuthUID, orderId, outletId) {
+
+//? ref => https://onlineorderingapisv210.docs.apiary.io/#/reference/0/save-order?mc=reference%2F0%2Fsave-order%2Fsave-order%2F200
+function saveOrderToPetpooja(request, orderId) {
   return new Promise(async (resolve, reject) => {
     try {
+      const orderData = await supabaseInstance.from("Order").select("*, outletId(*), customerAuthUID(*), txnid(*), Order_Schedule!left(*), Order_Item!left(*, itemId(*)), DeliveryAddress!left(*)").eq("orderId", orderId).maybeSingle();
+      // console.log("orderData => ", orderData);
+      // console.log("orderData Order_Schedule => ", orderData.data?.Order_Schedule[0]);
+      // console.log("orderData Order_Item => ", orderData.data?.Order_Item);
+      // console.log("orderData outletId => ", orderData.data?.outletId);
 
-      let restaurentDataQuery= supabaseInstance.from("Outlet").select("*").eq("outletId", outletId);
-
-      // if (restaurantId) {
-      //   restaurentDataQuery = supabaseInstance.from("Restaurant").select("*").eq("restaurantId", restaurantId);
-      // } else if (restaurantId && outletId) {
-      //   restaurentDataQuery = supabaseInstance.from("Outlet").select("*").eq("restaurantId", restaurantId).eq("outletId", outletId);
-      // }
-      const restaurentData = await restaurentDataQuery.maybeSingle();
-
-      if (restaurentData.data?.petPoojaAppKey && restaurentData.data?.petPoojaAppSecret && restaurentData.data?.petPoojaApAccessToken && restaurentData.data?.petPoojaRestId) {
-        const customerData = await supabaseInstance.from("Customer").select("*").eq("customerAuthUID", customerAuthUID).maybeSingle();
-  
-        const orderData = await supabaseInstance.from("Order").select("*").eq("orderId", orderId)
-  
+      if (orderData.data?.outletId?.isOrderHandlingFromPetpooja && orderData.data?.outletId?.petPoojaAppKey && orderData.data?.outletId?.petPoojaAppSecret && orderData.data?.outletId?.petPoojaApAccessToken && orderData.data?.outletId?.petPoojaRestId) {
+        
         let payload = {
-          app_key: restaurentData.data?.petPoojaAppKey,
-          app_secret: restaurentData.data?.petPoojaAppSecret,
-          access_token: restaurentData.data?.petPoojaApAccessToken,
+          app_key: orderData.data?.outletId?.petPoojaAppKey,
+          app_secret: orderData.data?.outletId?.petPoojaAppSecret,
+          access_token: orderData.data?.outletId?.petPoojaApAccessToken,
           orderinfo: {
             OrderInfo: {
+
+              //* Done
               Restaurant: {
                 details: {
-                  res_name: restaurentData.data.restaurantName,
-                  address: restaurentData.data.address,
-                  contact_information: restaurentData.data.mobile,
-                  restID: restaurentData.data?.petPoojaRestId
+                  res_name: orderData.data?.outletId?.restaurantName,
+                  address: orderData.data?.outletId?.address,
+                  contact_information: orderData.data?.outletId?.mobile,
+                  restID: orderData.data?.outletId?.petPoojaRestId
                 }
               },
+
+              //* Done
               Customer: {
                 details: {
-                  email: customerData.data.email,
-                  name: customerData.data.name,
-                  address: "",
-                  phone: customerData.data.phone,
+                  email: orderData.data?.customerAuthUID?.email,
+                  name: orderData.data?.customerAuthUID?.customerName,
+                  address: orderData.data?.DeliveryAddress?.[0]?.address || '',
+                  phone: orderData.data?.customerAuthUID?.mobile,
                   latitude: "",
                   longitude: ""
                 }
               },
+
+              //* Done
               Order: {
                 details: {
                   orderID: orderId,
-                  preorder_date: "2022-01-01",
-                  preorder_time: "15:50:00",
-                  service_charge: "0",
-                  sc_tax_amount: "0",
-                  delivery_charges: "50",
-                  dc_tax_amount: "2.5",
-                  dc_gst_details: [],
-                  packing_charges: "20",
-                  pc_tax_amount: "1",
-                  pc_gst_details: [],
-                  order_type: "",
-                  ondc_bap: "",
-                  advanced_order: "N",
-                  payment_type: "COD",
+                  created_on: moment(new Date(orderData.data?.created_at)).format("YYYY-MM-DD HH:mm:ss"),
+                  preorder_date: orderData.data?.Order_Schedule?.[0]?.scheduleDate,
+                  preorder_time: orderData.data?.Order_Schedule?.[0]?.scheduleDate,
+
+                  order_type: orderData.data?.isDelivery ? 'H' : orderData.data?.isPickUp ? 'P' : 'D',
+
+                  payment_type: "ONLINE",
+                  total: orderData.data?.txnid?.amount || 0, //todo add charge
+                  tax_total: orderData.data?.txnid?.foodGST || 0,
+                  packing_charges: orderData.data?.txnid?.packagingCharge || 0,
+                  pc_tax_amount: "0", //* Tax amount calculated on packing charge
+                  pc_gst_details: [], //* Packing Charge GST liability with amount. It will be there in Order object (Required for Ecomm platform)
+                  delivery_charges: "0", //todo add delivery charge
+                  dc_tax_amount: "0", //* Tax amount calculated on delivery charge
+                  dc_gst_details: [], //* Delivery Charge GST liability with amount. It will be there in Order object (Required for Ecomm platform)
+                  service_charge: "0", //* Service charge applicable at order level.
+                  sc_tax_amount: "0",  //* Tax calculated on service charge
+                  discount_total: "0",
+                  discount_type: "F",
+
+                  description: "",
+                  min_prep_time: orderData.data?.isScheduleNow ? orderData.data?.preparationTime : 0,
+                  // callback_url: `${request.protocol}://${request.get('host')}/petpooja/pushMenu/petpooja-status-change/${orderId}`,
+                  callback_url: `https://mealpe-testing-api.onrender.com/petpooja/pushMenu/petpooja-status-change/${orderId}`,
+                  enable_delivery: 1, //*Values can be 0 or 1 where 0 means Rider from thirdparty side will come and 1 means Rider from Restaurant i.e. self delivery order.
+
+                  ondc_bap: "MealPe", //*An identifier to indicate if the order is from ONDC by passing the buyer app name.
+                  advanced_order: "N", //* Flag which says that placed order is advance or not.Value is Boolean either Y or N.
+                  
                   table_no: "",
                   no_of_persons: "0",
-                  discount_total: "0",
-                  tax_total: "65.52",
-                  discount_type: "F",
-                  total: orderData.data[0].totalPrice,
-                  description: "",
-                  created_on: "2022-01-01 15:49:00",
-                  enable_delivery: 1,
-                  min_prep_time: 20,
-                  callback_url: "https.xyz.abc"
                 }
               },
+
+              //* Done
               OrderItem: {
-                details: [
-                  // {
-                  //     id: orderitemData.data[0].itemId,
-                  //     name: "Garlic Bread (3Pieces)",
-                  //     gst_liability: "vendor",
-                  //     item_tax: [
-                  //         {
-                  //             id: "11213",
-                  //             name: "CGST",
-                  //             amount: "3.15"
-                  //         },
-                  //         {
-                  //             id: "20375",
-                  //             name: "SGST",
-                  //             amount: "3.15"
-                  //         }
-                  //     ],
-                  //     item_discount: "14",
-                  //     price: orderitemData.data[0].itemPrice,
-                  //     final_price: orderitemData.data[0].calculatedPrice,
-                  //     quantity: orderitemData.data[0].quantity,
-                  //     description: "",
-                  //     variation_name: "3Pieces",
-                  //     variation_id: "89058",
-                  //     AddonItem: {
-                  //         details: []
-                  //     }
-                  // }
-                ]
+                details: []
               },
+
               Tax: {
                 details: []
               },
@@ -503,50 +485,67 @@ function saveOrderToPetpooja(restaurantId, customerAuthUID, orderId, outletId) {
             device_type: "Web"
           }
         }
-        const orderitemData = await supabaseInstance.from("Order_Item").select("*").eq("orderId", orderId);
-        for (let data of orderitemData.data) {
+
+        for (let itemData of orderData.data?.Order_Item) {
           let petpoojaOrderObj = {
-  
-            id: data.itemId,
-            name: "Garlic Bread (3Pieces)",
-            gst_liability: "vendor",
-            item_tax: [
-              {
-                id: "11213",
-                name: "CGST",
-                amount: "3.15"
-              },
-              {
-                id: "20375",
-                name: "SGST",
-                amount: "3.15"
-              }
-            ],
-            item_discount: "14",
-            price: data.itemPrice,
-            final_price: data.calculatedPrice,
-            quantity: data.quantity,
+            id: itemData?.itemId?.itemid,
+            name: itemData?.itemId?.itemname,
             description: "",
-            variation_name: "3Pieces",
-            variation_id: "89058",
+            
+            gst_liability: "vendor", //* Required for Ecomm platform and Optional for others.GST liability ownership. It will be there in the item object (vendor/restaurant)
+            item_tax: [], //* Tax calculated at item level after discount
+            item_discount: "0",
+            final_price: itemData.itemPrice, //* Item price after discount. If there is no discount, Price and finalPrice objects will have the same value.
+            price: itemData.itemPrice, //* Unit price of item.(This price includes addonitems price and if variations then includes variation price.)
+            // price: itemData.calculatedPrice,
+            quantity: itemData.quantity,
+
+            variation_name: "",
+            variation_id: "",
             AddonItem: {
               details: []
             }
           }
           payload.orderinfo.OrderInfo.OrderItem.details.push(petpoojaOrderObj);
         }
-  
-        const payloadData = await axios.post(petpoojaconfig.config.save_order_api, payload);
-  
-        resolve({
-          success: true,
-          message: "",
-          data: payloadData?.data
+
+        // const payloadData = await axios.post(petpoojaconfig.config.save_order_api, payload);
+
+        let saveOrderReaponse = null;
+        let saveOrderError    = null;
+        axios.post(petpoojaconfig.config.save_order_api, payload).then((_saveOrderReaponse) => {
+          if (_saveOrderReaponse.data?.success === '1') {
+            saveOrderReaponse = _saveOrderReaponse.data;
+          } else {
+            saveOrderError = _saveOrderReaponse.data;
+          }
+        }).catch((_saveOrderError) => {
+          let _err = _saveOrderError?.response?.data || _saveOrderError?.response || _saveOrderError;
+          saveOrderError = _err;
+        }).finally(async () => {
+          let _postObject = {
+            orderId: orderId,
+            postBody: payload            
+          }
+          if (saveOrderReaponse) {
+            _postObject.success = saveOrderReaponse;
+          }
+          if (saveOrderError) {
+            _postObject.error = saveOrderError;
+          }
+
+          const insertResponse = await supabaseInstance.from('Order_Save_Petpooja').insert(_postObject).select('*').maybeSingle();
+          console.log("insertResponse => ", insertResponse);
+          resolve({
+            success: Boolean(saveOrderReaponse),
+            Order_Save_Petpooja: insertResponse?.data || null
+          })
         })
       } else {
-        resolve({success: false, error: "Petpooja config not found."})
+        resolve({ success: false, error: "Petpooja config not found." });
       }
     } catch (error) {
+      console.log(error);
       resolve({
         success: false,
         error: error?.message || error
@@ -555,13 +554,50 @@ function saveOrderToPetpooja(restaurantId, customerAuthUID, orderId, outletId) {
   })
 };
 
+router.post("/saveOrderToPetpoojaTest", async (req, res) => {
+  saveOrderToPetpooja(req, 'c93a5f8c-25b8-4b3c-a203-395f639f0b06').then(response => {
+    res.send(response);
+  }).catch(err => {
+    res.send(err);
+  })
+})
+
+router.post("/petpooja-status-change/:orderId", async (req, res) => {
+  const postBody = req.body;
+  const query = req.query;
+  const params = req.params;
+
+  // console.log("petpooja-status-change-[POST]-postBody => ", postBody);
+  // console.log("petpooja-status-change-[POST]-query =>    ", query);
+  // console.log("petpooja-status-change-[POST]-params =>   ", params);
+
+  const { orderID, status } = req.body;
+
+  if (orderID && status) {
+    try {
+      const orderResponse = await supabaseInstance.from("Order").update({orderStatusId: status}).eq("orderId", orderID).select("*").maybeSingle();
+      if (orderResponse.data) {
+        console.log("status change successfully");
+        res.send({success: true});
+      } else {
+        throw orderResponse.error;
+      }
+    } catch (error) {
+      res.send({success: false});
+      console.log("status change -> ", error);
+    }
+  } else {
+    console.log({ orderID, status });
+    res.send({success: false});
+  }
+})
 
 function updateOrderStatus(orderId, updatedOrderStatus) {
   return new Promise(async (resolve, reject) => {
     try {
 
-      const orderQuery= await supabaseInstance.from("Order").select("*,outletId(*)").eq("orderId", orderId).maybeSingle();
-  
+      const orderQuery = await supabaseInstance.from("Order").select("*,outletId(*)").eq("orderId", orderId).maybeSingle();
+
       if (orderQuery?.data) {
         const orderData = orderQuery.data;
         if (
@@ -570,12 +606,12 @@ function updateOrderStatus(orderId, updatedOrderStatus) {
           orderData?.outletId?.petPoojaApAccessToken &&
           orderData?.outletId?.petPoojaRestId
         ) {
-          let payload ={
+          let payload = {
             app_key: orderData?.outletId?.petPoojaAppKey,
-            app_secret: orderData?.outletId?.petPoojaAppSecret, 
-            access_token: orderData?.outletId?.petPoojaApAccessToken, 
+            app_secret: orderData?.outletId?.petPoojaAppSecret,
+            access_token: orderData?.outletId?.petPoojaApAccessToken,
             restID: orderData?.outletId?.petPoojaRestId,
-            orderID: orderId, 
+            orderID: orderId,
             clientorderID: orderData?.customerAuthUID,
             cancelReason: "",
             status: updatedOrderStatus
@@ -584,14 +620,14 @@ function updateOrderStatus(orderId, updatedOrderStatus) {
           const petPoojaUpdateOrderStatus = await axios.post(petpoojaconfig.config.update_order_status_api, payload);
 
           if (petPoojaUpdateOrderStatus.data) {
-            resolve({success: true, data: petPoojaUpdateOrderStatus.data})
+            resolve({ success: true, data: petPoojaUpdateOrderStatus.data })
           }
 
         } else {
-          resolve({success: false, error: "Petpooja config not found."})
+          resolve({ success: false, error: "Petpooja config not found." })
         }
       } else {
-        resolve({success: false, error: "Order not found."})
+        resolve({ success: false, error: "Order not found." })
       }
 
     } catch (error) {
@@ -602,9 +638,9 @@ function updateOrderStatus(orderId, updatedOrderStatus) {
     }
   })
 };
-// updateOrderStatus("cf9474cc-392b-4c49-b246-a0afc1e34e47", "5").then(res => {
+// updateOrderStatus("c93a5f8c-25b8-4b3c-a203-395f639f0b06", "10").then(res => {
 //   console.log("res", res);
 // }).catch(err => {
 //   console.error(err);
 // })
-module.exports = { router, saveOrderToPetpooja ,updateOrderStatus};
+module.exports = { router, saveOrderToPetpooja, updateOrderStatus };
